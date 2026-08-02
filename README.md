@@ -45,6 +45,12 @@ npm install
 docker compose up -d            # PostgreSQL on localhost:5433
 cp .env.example .env            # add your WHYDID_LLM_API_KEY
 npm run seed                    # 60 days of synthetic assistant conversations
+npm run dev -- serve            # dashboard + API on http://localhost:8787
+```
+
+Open http://localhost:8787 — the built-in observability dashboard shows every metric with week-over-week deltas and trends, one click decomposes any change, and the Ask view runs full investigations. Prefer the terminal?
+
+```bash
 npm run dev -- ask "why did resolution_rate drop in the last 7 days?" --verbose
 ```
 
@@ -134,26 +140,36 @@ Typical questions once synced: "why did helpfulness drop after the v2 release?",
 
 No Langfuse at hand? `npx tsx scripts/mock-langfuse.ts` serves a deterministic fake instance (with an injected incident) to try the whole loop against.
 
-## Serve mode: embed the agent in your dashboard
+## The observability dashboard
 
-`whydid serve` exposes the same capabilities over HTTP, so a metrics dashboard can show numbers *and* explain them:
+`whydid serve` ships a full dashboard at `GET /` — deploy the agent and the platform is already there:
 
 ```bash
 whydid --config presets/langfuse.yaml serve --port 8787
 ```
 
+- **Overview** — every configured metric as a card: last 7 full days, delta vs the previous 7, a 14-day sparkline. The card grid is generated from your config; add a metric to the YAML and it appears.
+- **Metric drill-down** — trend chart with ±2σ outlier markers, switchable window (7/14/30d) and dimension, and the decomposition table: contribution bars for additive metrics, the mix / behavior / interaction split for rates, with the same honesty guards the agent gets (unstable-share warnings, large-interaction warnings).
+- **Ask** — full investigations in the browser, with the report and the expandable tool-call audit trail. One click on any metric pre-fills "why did X change, which dimension drove it?".
+
+Everything except Ask runs on `POST /tool` — deterministic SQL, no LLM tokens spent by browsing.
+
+The dashboard is static files (`web/`, no build step). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one).
+
+### The HTTP API
+
 | Route | What it does |
 |---|---|
-| `GET /` | Built-in demo page — ask questions from the browser, see the report and audit trail |
-| `GET /healthz` | Liveness + the semantic layer (metrics, dimensions, tools) |
-| `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For dashboard panels. |
+| `GET /` | The dashboard |
+| `GET /healthz` | Liveness + the semantic layer (metrics with kinds/labels, dimensions, tools) |
+| `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For your own panels. |
 | `POST /ask` | `{"question": "why did X drop?"}` — full investigation; returns the report, the tool-call log, and token usage |
 
 ```bash
 curl -X POST localhost:8787/ask -d '{"question":"why did score_helpfulness drop in the last 3 days?"}'
 ```
 
-The tool-call log in the response is the report's audit trail: every number in the narrative can be traced to the exact tool call that produced it — render it in your UI as "how the agent got here".
+The tool-call log in the response is the report's audit trail: every number in the narrative can be traced to the exact tool call that produced it.
 
 Binds `127.0.0.1` by default. To expose it further, set `WHYDID_SERVE_TOKEN` (bearer auth) and use `--host` deliberately — `/ask` spends LLM tokens.
 

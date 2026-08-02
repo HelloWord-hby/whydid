@@ -13,11 +13,24 @@
  * WHYDID_SERVE_TOKEN and put it behind TLS — /ask spends LLM tokens.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { type Sql } from 'postgres';
 import { type WhydidConfig } from './config/schema.js';
 import { executeTool, listToolNames } from './tools/index.js';
 import { runAgent } from './agent/orchestrator.js';
-import { DEMO_PAGE } from './ui/demo-page.js';
+
+/**
+ * The dashboard is plain static files in web/ at the package root — no
+ * build step. Resolved relative to this module so it works both from
+ * src/ (tsx) and dist/ (compiled). Exact-match whitelist, no path math.
+ */
+const WEB_DIR = new URL('../web/', import.meta.url);
+const STATIC_FILES: Record<string, { file: string; type: string }> = {
+  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
+  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
+  '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/style.css': { file: 'style.css', type: 'text/css; charset=utf-8' },
+};
 
 export interface ServeOptions {
   port: number;
@@ -51,9 +64,18 @@ export function startServer(
       return;
     }
 
-    if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(DEMO_PAGE);
+    const staticEntry = req.method === 'GET' ? STATIC_FILES[req.url ?? ''] : undefined;
+    if (staticEntry) {
+      try {
+        const content = await readFile(new URL(staticEntry.file, WEB_DIR));
+        res.writeHead(200, {
+          'Content-Type': staticEntry.type,
+          'Cache-Control': 'no-cache',
+        });
+        res.end(content);
+      } catch {
+        sendJson(res, 500, { error: `Dashboard file ${staticEntry.file} not found.` });
+      }
       return;
     }
 
@@ -61,8 +83,17 @@ export function startServer(
       sendJson(res, 200, {
         ok: true,
         table: config.table,
-        metrics: Object.keys(config.metrics),
-        dimensions: Object.keys(config.dimensions),
+        metrics: Object.entries(config.metrics).map(([name, m]) => ({
+          name,
+          kind: m.kind,
+          label: m.label ?? name,
+          unit: m.unit ?? null,
+          decompose: m.decompose,
+        })),
+        dimensions: Object.entries(config.dimensions).map(([name, d]) => ({
+          name,
+          label: d.label ?? name,
+        })),
         tools: listToolNames(),
       });
       return;

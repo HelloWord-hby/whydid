@@ -144,6 +144,7 @@ whydid --config presets/langfuse.yaml serve --port 8787
 
 | Route | What it does |
 |---|---|
+| `GET /` | Built-in demo page — ask questions from the browser, see the report and audit trail |
 | `GET /healthz` | Liveness + the semantic layer (metrics, dimensions, tools) |
 | `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For dashboard panels. |
 | `POST /ask` | `{"question": "why did X drop?"}` — full investigation; returns the report, the tool-call log, and token usage |

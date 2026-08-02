@@ -1,0 +1,65 @@
+# whydid semantic layer for a Langfuse-synced table.
+#
+# Populate the table first:
+#   whydid sync langfuse            (needs LANGFUSE_HOST / _PUBLIC_KEY / _SECRET_KEY)
+# then:
+#   whydid --config presets/langfuse.yaml ask "why did traces drop last week?"
+#
+# The sync prints the score columns it discovered (score_<name>) — add each
+# one you care about as a rate metric below.
+
+table: langfuse_conversations
+time_column: created_at
+timezone: UTC
+
+context: >-
+  The data is LLM application traces synced from Langfuse, one row per
+  trace. latency_sec and total_cost come from Langfuse's trace metrics.
+  score_* columns are evaluation scores (LLM-as-judge or human), averaged
+  per trace; they are judgements, not ground truth — treat absolute levels
+  with care, trends and comparisons are reliable.
+
+metrics:
+  traces:
+    kind: additive
+    expr: COUNT(*)
+    label: Traces
+  unique_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id)
+    label: Unique users
+  unique_sessions:
+    kind: additive
+    expr: COUNT(DISTINCT session_id)
+    label: Unique sessions
+  avg_latency_sec:
+    kind: rate
+    of: latency_sec
+    label: Average latency
+    unit: s
+  avg_cost:
+    kind: rate
+    of: total_cost
+    label: Average cost per trace
+    unit: USD
+  # Add synced score columns as rate metrics, e.g.:
+  # score_helpfulness:
+  #   kind: rate
+  #   of: score_helpfulness
+  #   label: Helpfulness
+  #   note: LLM-as-judge score; trend-reliable, absolute level is soft.
+
+dimensions:
+  name:
+    column: name
+    label: Trace name
+    note: Usually the route/feature that produced the trace.
+  release:
+    column: release
+    label: Release
+  version:
+    column: version
+    label: Version
+  environment:
+    column: environment
+    label: Environment

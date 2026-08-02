@@ -5,6 +5,8 @@
  *   whydid ask "why did resolution_rate drop last week?"   agent investigation
  *   whydid tool get_metric --args '{...}'                  run one tool directly
  *   whydid tools                                           list tools & semantic layer
+ *   whydid serve                                           HTTP API for dashboards
+ *   whydid sync langfuse                                   pull traces/scores from Langfuse
  *   whydid seed                                            create + fill the demo table
  */
 import 'dotenv/config';
@@ -80,6 +82,32 @@ program
     for (const [name, d] of Object.entries(config.dimensions)) {
       process.stdout.write(`  ${name} → column ${d.column}\n`);
     }
+  });
+
+program
+  .command('serve')
+  .description('Serve the agent over HTTP (GET /healthz, POST /tool, POST /ask)')
+  .option('-p, --port <port>', 'port to listen on', '8787')
+  .option('--host <host>', 'address to bind (default localhost only)', '127.0.0.1')
+  .action(async (opts: { port: string; host: string }) => {
+    const config = loadConfig(program.opts().config);
+    const db = getDb(config.timezone);
+    const { startServer } = await import('./server.js');
+    startServer(config, db, { port: Number(opts.port), host: opts.host });
+  });
+
+program
+  .command('sync')
+  .description('Sync data from an observability platform into PostgreSQL')
+  .argument('<source>', 'currently supported: langfuse')
+  .option('--from <date>', 'backfill start (ISO date); default: resume from last sync or 30 days')
+  .option('--table <name>', 'target table name', 'langfuse_conversations')
+  .action(async (source: string, opts: { from?: string; table: string }) => {
+    if (source !== 'langfuse') {
+      throw new Error(`Unknown sync source "${source}". Currently supported: langfuse`);
+    }
+    const { syncLangfuse } = await import('./connectors/langfuse/sync.js');
+    await syncLangfuse({ from: opts.from, table: opts.table });
   });
 
 program

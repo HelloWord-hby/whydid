@@ -110,6 +110,52 @@ The `note` fields are the interesting part: coverage gaps, definition quirks, an
 
 Then set `DATABASE_URL` (read access is enough — the pool sets `default_transaction_read_only`, so PostgreSQL itself rejects any write) and ask away.
 
+## Connect it to your observability platform (Langfuse)
+
+Observability platforms answer *what changed*; whydid answers *why*. The built-in Langfuse connector closes that loop:
+
+```bash
+export LANGFUSE_HOST=https://cloud.langfuse.com   # or your self-hosted URL
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_SECRET_KEY=sk-lf-...
+
+whydid sync langfuse                 # incremental: traces + scores → PostgreSQL
+whydid --config presets/langfuse.yaml ask "why did avg_latency_sec spike yesterday?"
+```
+
+What the sync does:
+
+- Pulls traces (id, timestamps, user, session, release, version, environment, latency, cost) and scores through the stable page-based public API — works with Langfuse Cloud and self-hosted v2/v3.
+- Pivots numeric and boolean scores into `score_<name>` columns, so every evaluation score becomes a decomposable rate metric. The sync prints ready-to-paste config for each score it finds.
+- Is incremental and idempotent: a cursor plus a 1-hour overlap window with upserts, so re-runs and late-arriving data are safe. Run it from cron.
+- Stores **no conversation content** — metadata and numbers only.
+
+Typical questions once synced: "why did helpfulness drop after the v2 release?", "is the cost increase traffic mix or did a route get more expensive?", "which release drove the latency regression?"
+
+No Langfuse at hand? `npx tsx scripts/mock-langfuse.ts` serves a deterministic fake instance (with an injected incident) to try the whole loop against.
+
+## Serve mode: embed the agent in your dashboard
+
+`whydid serve` exposes the same capabilities over HTTP, so a metrics dashboard can show numbers *and* explain them:
+
+```bash
+whydid --config presets/langfuse.yaml serve --port 8787
+```
+
+| Route | What it does |
+|---|---|
+| `GET /healthz` | Liveness + the semantic layer (metrics, dimensions, tools) |
+| `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For dashboard panels. |
+| `POST /ask` | `{"question": "why did X drop?"}` — full investigation; returns the report, the tool-call log, and token usage |
+
+```bash
+curl -X POST localhost:8787/ask -d '{"question":"why did score_helpfulness drop in the last 3 days?"}'
+```
+
+The tool-call log in the response is the report's audit trail: every number in the narrative can be traced to the exact tool call that produced it — render it in your UI as "how the agent got here".
+
+Binds `127.0.0.1` by default. To expose it further, set `WHYDID_SERVE_TOKEN` (bearer auth) and use `--host` deliberately — `/ask` spends LLM tokens.
+
 ## The tools
 
 | Tool | What it does |
@@ -125,26 +171,30 @@ The mix/behavior distinction is the heart of rate attribution. "Resolution rate 
 ## Architecture
 
 ```
+Langfuse ──sync──► PostgreSQL ◄──── your own event table works too
+                       ▲ read-only session
+                       │
 question ──► orchestrator (LLM loop, max 12 turns, history compression)
-                 │  picks tools, enum-constrained by your config
-                 ▼
-             tools (validation, period guards, direction notes)
-                 │
-                 ▼
-             sql-builder (parameterized, identifiers from config only)
-                 │
-                 ▼
-             PostgreSQL (read-only session)  ──►  attribution math (pure fns)
-                 │
-                 ▼
-             report (numbers verbatim from tools, narrative from LLM)
+   ▲             │  picks tools, enum-constrained by your config
+   │             ▼
+ CLI /        tools (validation, period guards, direction notes)
+ HTTP serve      │
+   ▲             ▼
+   │         sql-builder (parameterized, identifiers from config only)
+   │             │
+   │             ▼
+   └──────── report + tool-call audit trail
+             (numbers verbatim from tools, narrative from LLM,
+              attribution math in pure functions)
 ```
 
 - `src/attribution/` — pure math, no I/O, fully unit-tested
 - `src/core/` — periods & SQL building, pure, fully unit-tested
-- `src/tools/` — the five tools + config-derived JSON schemas
+- `src/tools/` — the five tools + config-derived JSON schemas, zod-validated at dispatch
 - `src/agent/` — LLM client (any OpenAI-compatible endpoint), system prompt builder, tool loop
-- `src/demo/` — deterministic synthetic dataset
+- `src/connectors/langfuse/` — public-API client, pure transforms, incremental sync
+- `src/server.ts` — HTTP mode for dashboards (`/healthz`, `/tool`, `/ask`)
+- `src/demo/` — deterministic synthetic dataset; `scripts/mock-langfuse.ts` — fake Langfuse for local dev
 
 ## Notes
 

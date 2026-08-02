@@ -1,0 +1,72 @@
+# whydid semantic layer — demo configuration.
+#
+# This file is the ONLY thing you edit to point whydid at your own data:
+# one row per event/conversation in `table`, metrics defined as SQL
+# aggregates, dimensions as columns. The LLM can only reference metric and
+# dimension names listed here — everything else is rejected before SQL.
+#
+# The demo table is created by `npm run seed` (synthetic data, fixed seed).
+
+table: assistant_conversations
+time_column: created_at
+timezone: UTC
+
+# Free-text context injected into the system prompt. Describe your product
+# so the agent narrates in your domain language.
+context: >-
+  The data is conversations between users and the AI support assistant of a
+  developer-tools product. One row per conversation. "resolved" means the
+  assistant answered without human handoff; unresolved conversations may
+  escalate to a human agent. Model versions m-1/m-2 identify the assistant
+  release serving the conversation.
+
+metrics:
+  conversations:
+    kind: additive
+    expr: COUNT(*)
+    label: Conversations
+  sessions:
+    kind: additive
+    expr: COUNT(DISTINCT session_id)
+    label: Sessions
+  unique_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id)
+    label: Unique users
+  resolution_rate:
+    kind: rate
+    of: CASE WHEN resolved THEN 1.0 ELSE 0.0 END
+    label: Resolution rate
+    note: Share of conversations resolved without human handoff.
+  escalation_rate:
+    kind: rate
+    of: CASE WHEN escalated THEN 1.0 ELSE 0.0 END
+    label: Escalation rate
+  avg_latency_ms:
+    kind: rate
+    of: latency_ms
+    label: Average latency
+    unit: ms
+
+dimensions:
+  intent:
+    column: intent
+    label: Conversation intent
+    values:
+      how_to: How-to question
+      billing: Billing
+      bug_report: Bug report
+      integration: Integration help
+      account: Account & access
+      refund: Refund request
+      other: Other
+  language:
+    column: language
+    label: User language
+  channel:
+    column: channel
+    label: Channel
+  model_version:
+    column: model_version
+    label: Assistant model version
+    note: m-2 is the newer release; rollout ramped gradually.

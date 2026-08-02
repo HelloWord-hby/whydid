@@ -1,0 +1,44 @@
+{
+  "name": "whydid",
+  "version": "0.1.0",
+  "description": "An attribution agent that answers \"why did my metric change?\" — deterministic SQL does the math, the LLM only routes and narrates.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "whydid": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "seed": "tsx src/demo/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "attribution",
+    "analytics",
+    "llm",
+    "agent",
+    "metrics",
+    "root-cause",
+    "oaxaca-blinder"
+  ],
+  "dependencies": {
+    "commander": "^12.1.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "postgres": "^3.4.5",
+    "yaml": "^2.6.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -2,6 +2,7 @@
  * whydid serve — the agent as an HTTP service, so dashboards and
  * observability platforms can embed it.
  *
+ *   GET  /         built-in demo page (a reference client for the API)
  *   GET  /healthz  liveness + semantic-layer summary
  *   POST /tool     {name, args}   deterministic tool call, no LLM involved.
  *                                 For dashboard panels that need numbers.
@@ -16,6 +17,7 @@ import { type Sql } from 'postgres';
 import { type WhydidConfig } from './config/schema.js';
 import { executeTool, listToolNames } from './tools/index.js';
 import { runAgent } from './agent/orchestrator.js';
+import { DEMO_PAGE } from './ui/demo-page.js';
 
 export interface ServeOptions {
   port: number;
@@ -46,6 +48,12 @@ export function startServer(
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end();
+      return;
+    }
+
+    if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(DEMO_PAGE);
       return;
     }
 

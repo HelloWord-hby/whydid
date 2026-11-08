@@ -13,3 +13,6 @@ docs/需求-*.md
 # Built dashboard (npm run build:ui)
 ui/dist/
 *.tsbuildinfo
+
+# Eval runs against the scripted mock are harness checks, not results
+evals/results/*mock*

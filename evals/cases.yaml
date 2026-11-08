@@ -1,0 +1,115 @@
+# whydid regression set — questions with known answers.
+#
+# Every expected answer is an incident the demo seed injects on purpose
+# (src/demo/seed.ts, src/demo/seed-events.ts, src/boards/model/demo.ts),
+# so the "right answer" is known in advance. Scoring is code, not an LLM
+# judge (src/evals/score.ts):
+#
+#   find        every group must match: at least one of its terms appears
+#               in the answer (case-insensitive). The driver was named.
+#   bonus       reported, not gating: a deeper finding a strong answer makes.
+#   direction   in the conclusion, sentences naming the subject state the
+#               expected direction and never only the opposite one.
+#   exit        the answer must say the data cannot answer the question.
+#   grounding   every number in the answer appears in a tool result
+#               (always checked; computed by the server for each answer).
+#   language    a Chinese question must get a Chinese answer.
+#
+# Run: npm run eval (needs WHYDID_LLM_* and the seeded demo database),
+#      npm run eval:mock (pipeline check with the scripted mock LLM).
+
+cases:
+  - id: model_faithfulness_drop
+    note: Release v1.9 (4 days before today) lowers faithfulness on rag-answer.
+    entry: card
+    card: faithfulness
+    question: Why did Faithfulness change vs the previous 7 days?
+    find:
+      - [rag-answer]
+      - [v1.9, "1.9"]
+    direction: { subject: [faithfulness, 忠实度], expect: down }
+
+  - id: model_thumbs_down_rise
+    note: Worse answers on rag-answer after v1.9 draw more thumbs-down.
+    entry: card
+    card: negative_feedback
+    question: Why did the thumbs-down rate change vs the previous 7 days?
+    find:
+      - [rag-answer, faithfulness, v1.9]
+    direction: { subject: [thumbs-down, thumbs down, 点踩], expect: up }
+
+  - id: model_board_review
+    note: The board review should surface the faithfulness incident first.
+    entry: board
+    board: model_output
+    question: "Review the Model Output board: what moved the most in the last 7 days, and why?"
+    find:
+      - [faithfulness]
+      - [rag-answer, v1.9]
+
+  - id: model_samples_review
+    note: The low-score samples concentrate on rag-answer under v1.9.
+    entry: card
+    card: low_score_samples
+    question: What do these cases have in common?
+    find:
+      - [rag-answer]
+    bonus:
+      - [v1.9]
+
+  - id: main_resolution_drop
+    note: Model m-2 tanks resolution of integration conversations (behavior effect); billing share grows (mix).
+    entry: chat
+    question: Why did resolution_rate drop in the last 7 days compared to the previous 7 days?
+    find:
+      - [integration]
+    bonus:
+      - [m-2]
+      - [behavior, 组内]
+    direction: { subject: [resolution, 解决率], expect: down }
+
+  - id: main_resolution_drop_zh
+    note: Same incident, asked in Chinese; the answer must be in Chinese.
+    entry: chat
+    question: 最近 7 天 resolution_rate 和前 7 天相比为什么下降了？是结构变化还是某个分组自己变差了？
+    language: zh
+    find:
+      - [integration, 集成]
+    direction: { subject: [resolution_rate, 解决率], expect: down }
+
+  - id: main_conversations_growth
+    note: Billing traffic roughly doubles in the last 5 days and drives conversation volume.
+    entry: chat
+    question: Why did conversations grow in the last 7 days compared to the previous 7 days?
+    find:
+      - [billing, 账单]
+    direction: { subject: [conversation, 对话], expect: up }
+
+  - id: events_sessions_push
+    note: A push campaign in the last 3 days adds sessions from the push entry.
+    entry: chat
+    board: product_events
+    question: Why did sessions grow in the last 7 days?
+    find:
+      - [push, 推送]
+    direction: { subject: [session, 会话], expect: up }
+
+  - id: events_ctr_up
+    note: The suggested-questions redesign (10 days ago) lifts click-through across all suggestions.
+    entry: card
+    card: suggestion_ctr
+    question: Why did suggestion click-through change vs the previous 7 days?
+    direction: { subject: [click-through, ctr, 点击率], expect: up }
+
+  - id: exit_unknown_metric
+    note: There is no revenue metric anywhere; the agent must say so instead of answering.
+    entry: chat
+    question: Why did revenue drop last week?
+    exit: true
+
+  - id: exit_no_data
+    note: The demo data covers only the last 60 days; January 2024 is empty.
+    entry: chat
+    board: product_events
+    question: Why did sessions drop between 2024-01-01 and 2024-01-08?
+    exit: true

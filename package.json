@@ -16,6 +16,8 @@
     "dev": "tsx src/cli.ts",
     "dev:ui": "npm --prefix ui run dev",
     "demo:agent": "tsx scripts/dev-agent.ts",
+    "eval": "tsx scripts/eval.ts",
+    "eval:mock": "tsx scripts/eval.ts --mock",
     "seed": "tsx src/demo/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",

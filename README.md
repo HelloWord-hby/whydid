@@ -278,6 +278,29 @@ Binds `127.0.0.1` by default. To expose it further, set `WHYDID_SERVE_TOKEN` (be
 
 The mix/behavior distinction is the heart of rate attribution. "Resolution rate dropped" demands completely different action depending on whether cheap-to-resolve traffic went away (mix — nothing broke) or a segment actually got worse (behavior — go find what changed in it).
 
+## Evaluation
+
+The demo seed injects incidents on purpose, so the right answers are known. `evals/cases.yaml` turns them into a regression set: eleven questions across both boards, the main config, a Chinese question, and two questions the data cannot answer (a metric that does not exist, a window with no data).
+
+```bash
+npm run eval              # against WHYDID_LLM_* (needs the seeded demo database)
+npm run eval -- --only main_resolution_drop,exit_no_data
+npm run eval:mock         # scripted mock LLM — checks the harness, not quality
+```
+
+Scoring is code, not an LLM judge (`src/evals/score.ts`):
+
+| Check | Passes when |
+|---|---|
+| driver | every expected term group appears in the answer (e.g. `rag-answer` and `v1.9`) |
+| direction | sentences in the conclusion that name the metric state the expected direction and never only the opposite one |
+| honest exit | for unanswerable questions, the answer says the data cannot answer |
+| grounded | every number in the answer appears in a tool result (the same server-side check shown under each answer in the UI) |
+| language | a Chinese question gets a Chinese answer |
+| budget / completed | at most 15 tool calls, no error, not cut off at the turn limit |
+
+Each run writes `evals/results/<date>-<model>.md` (summary, per-case checks, full answers) and `.json`, stamped with the prompt version, so prompt changes can be compared run against run. The agent is assembled exactly as `whydid serve` assembles it. The checks are heuristics with stated limits: term matching can miss a correct answer phrased unusually, and the direction check reads the conclusion only.
+
 ## Architecture
 
 ```

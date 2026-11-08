@@ -1,0 +1,80 @@
+# whydid semantic layer for a product-analytics event table.
+#
+# One row per tracked event. `npm run seed` creates the demo table
+# (app_events). Point `table` at your own event stream or a view over it;
+# the metrics below are plain SQL aggregates with FILTER clauses.
+
+table: app_events
+time_column: created_at
+timezone: UTC
+
+context: >-
+  Product analytics events of a developer-tools app with an AI assistant.
+  One row per event. A session starts with app_open; users may open the
+  chat, see up to three suggested questions (suggestion_impression rows,
+  clicked=true when tapped), send a question, receive an answer and leave
+  feedback. `entry` is where the session started.
+
+metrics:
+  active_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id)
+    label: Active users
+  sessions:
+    kind: additive
+    expr: COUNT(DISTINCT session_id)
+    label: Sessions
+  chat_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'chat_open')
+    label: Opened chat
+  asking_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'question_sent')
+    label: Asked a question
+  answered_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'answer_received')
+    label: Got an answer
+  feedback_users:
+    kind: additive
+    expr: COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'feedback_submit')
+    label: Left feedback
+  questions:
+    kind: additive
+    expr: COUNT(*) FILTER (WHERE event_name = 'question_sent')
+    label: Questions sent
+  suggestion_impressions:
+    kind: additive
+    expr: COUNT(*) FILTER (WHERE event_name = 'suggestion_impression')
+    label: Suggestions shown
+  suggestion_clicks:
+    kind: additive
+    expr: COUNT(*) FILTER (WHERE event_name = 'suggestion_impression' AND clicked)
+    label: Suggestion clicks
+  suggestion_ctr:
+    kind: rate
+    # NULL for every other event, so AVG runs over impressions only.
+    of: CASE WHEN event_name = 'suggestion_impression' THEN CASE WHEN clicked THEN 1.0 ELSE 0.0 END END
+    label: Suggestion click-through
+    note: Share of shown suggested questions that were tapped.
+
+dimensions:
+  entry:
+    column: entry
+    label: Entry point
+    values:
+      home: Home screen
+      chat_tab: Chat tab
+      push: Push notification
+      search: Search
+      share_link: Shared link
+  platform:
+    column: platform
+    label: Platform
+  suggestion:
+    column: suggestion
+    label: Suggested question
+  event_name:
+    column: event_name
+    label: Event

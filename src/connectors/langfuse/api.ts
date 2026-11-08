@@ -53,6 +53,20 @@ export class LangfuseApi {
     });
   }
 
+  /** One trace with its input/output; null when it does not exist. */
+  async getTrace(id: string): Promise<Record<string, unknown> | null> {
+    const url = new URL(`${this.baseUrl}/api/public/traces/${encodeURIComponent(id)}`);
+    const response = await fetch(url, {
+      headers: { Authorization: this.authHeader, 'Content-Type': 'application/json' },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const text = (await response.text()).slice(0, 300);
+      throw new Error(`Langfuse API ${response.status} on trace ${id}: ${text}`);
+    }
+    return (await response.json()) as Record<string, unknown>;
+  }
+
   private async *paginate<T>(
     path: string,
     params: Record<string, string>

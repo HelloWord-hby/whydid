@@ -7,17 +7,40 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="logo">w</span><b>whydid</b><span class="sub" id="subline">connecting…</span></div>
+      <nav id="nav" class="tabs"></nav>
+      <button class="btn" id="agent-toggle" type="button">✦ Agent</button>
+    </div>
+  </header>
   <div class="wrap">
-    <header>
-      <h1>whydid</h1>
-      <span class="sub" id="subline">connecting…</span>
-      <nav>
-        <a href="#/" id="nav-overview">Overview</a>
-        <a href="#/ask" id="nav-ask">Ask</a>
-      </nav>
-    </header>
     <main id="main"><div class="empty">Loading…</div></main>
   </div>
+
+  <aside class="agent" id="agent" hidden aria-label="Agent">
+    <div class="agent-head">
+      <div><b>Agent</b> <span class="muted" id="agent-model"></span></div>
+      <div class="agent-acts">
+        <button type="button" class="btn small subtle" id="agent-new" title="Start a new conversation">New chat</button>
+        <button type="button" class="icon" id="agent-close" title="Close">×</button>
+      </div>
+    </div>
+    <div class="agent-log" id="agent-log"></div>
+    <div class="agent-bottom">
+      <div class="agent-ctx" id="agent-ctx"></div>
+      <div class="agent-presets" id="agent-presets"></div>
+      <form class="agent-form" id="agent-form">
+        <textarea id="agent-input" rows="2" placeholder="Ask why a number moved…" disabled></textarea>
+        <button class="btn primary-sm" type="submit" disabled>Send</button>
+      </form>
+    </div>
+  </aside>
+
+  <script src="lib.js"></script>
+  <script src="layout.js"></script>
+  <script src="agent.js"></script>
+  <script src="boards.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

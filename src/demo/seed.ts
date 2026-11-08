@@ -20,6 +20,7 @@
  */
 import 'dotenv/config';
 import postgres from 'postgres';
+import { EVENTS_TABLE, seedEvents } from './seed-events.js';
 
 const TABLE = 'assistant_conversations';
 const DAYS = 60;
@@ -191,8 +192,10 @@ export async function seedDemo(): Promise<void> {
     }
 
     const [countRow] = await sql`SELECT COUNT(*)::int AS count FROM ${sql(TABLE)}`;
+    const eventCount = await seedEvents(sql);
     process.stdout.write(
       `Seeded ${countRow?.count ?? 0} synthetic conversations over ${DAYS} days into "${TABLE}".\n` +
+        `Seeded ${eventCount} synthetic product events into "${EVENTS_TABLE}".\n` +
         `Injected incidents (last 7 days): integration resolution drop on model m-2, billing volume surge.\n` +
         `Try:  npm run dev -- ask "why did resolution_rate drop in the last 7 days?"\n`
     );

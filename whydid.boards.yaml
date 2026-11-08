@@ -1,0 +1,305 @@
+# whydid dashboard boards.
+#
+# A board is one tab, bound to one data source. A card is configuration
+# only: which board, which provider computes the data, its params, and
+# how to display it (stat | line | table | bar | pie). Cards with
+# `default: true` form the default layout; the rest wait in the card library.
+#
+# Providers (src/boards/providers/) and the displays they support:
+#   model_output source: trace_count (stat, line), trace_average (stat),
+#     score_average (stat), score_trend (line), score_overview (table),
+#     low_score_rate (table, bar), low_score_samples (table),
+#     negative_feedback (stat), feedback_samples (table)
+#   semantic source:     metric_stat (stat), metric_trend (line),
+#     metric_breakdown (table, bar, pie — pie needs an additive metric),
+#     funnel (table, bar)
+
+sources:
+  model:
+    kind: model_output          # live Langfuse when LANGFUSE_* keys are set, demo data otherwise
+    feedback_score: user_feedback
+    negative_feedback_value: 0
+    low_score_threshold: 0.5
+    max_pages: 100
+  events:
+    kind: semantic
+    config: presets/app-events.yaml
+
+boards:
+  - id: model_output
+    title: Model Output
+    description: How the LLM answers are scored — quality trends, low-score rates, thumbs-down.
+    source: model
+  - id: product_events
+    title: Product Events
+    description: How people use the product — active users, entry points, funnel, suggested questions.
+    source: events
+
+cards:
+  # ── Model Output ────────────────────────────────────────────────────
+  - id: traces
+    board: model_output
+    title: Traces
+    description: LLM calls in the window
+    display: stat
+    provider: trace_count
+    default: true
+
+  - id: negative_feedback
+    board: model_output
+    title: Thumbs-down rate
+    description: Share of rated answers marked unhelpful by users
+    display: stat
+    provider: negative_feedback
+    default: true
+
+  - id: faithfulness
+    board: model_output
+    title: Faithfulness
+    description: Average LLM-judge score
+    display: stat
+    provider: score_average
+    params: { score: faithfulness }
+    default: true
+
+  - id: latency
+    board: model_output
+    title: Avg latency
+    display: stat
+    provider: trace_average
+    params: { field: latency }
+    default: true
+
+  - id: score_trend
+    board: model_output
+    title: Score trend
+    description: Daily average of every quality score
+    display: line
+    provider: score_trend
+    size: 2
+    default: true
+
+  - id: low_score_by_dimension
+    board: model_output
+    title: Low-score rate by dimension
+    display: table
+    provider: low_score_rate
+    params: { group_by: score }
+    size: 2
+    default: true
+
+  - id: low_score_samples
+    board: model_output
+    title: Low-score samples
+    description: Worst-scored answers, with the judge's rationale
+    display: table
+    provider: low_score_samples
+    params: { limit: 8 }
+    size: 4
+    default: true
+
+  - id: feedback_samples
+    board: model_output
+    title: Thumbs-down feedback
+    display: table
+    provider: feedback_samples
+    params: { limit: 8 }
+    size: 4
+    default: true
+
+  - id: score_overview
+    board: model_output
+    title: Score overview
+    description: Current vs previous average per quality score
+    display: table
+    provider: score_overview
+    size: 2
+
+  - id: low_score_by_route
+    board: model_output
+    title: Low faithfulness by route
+    display: table
+    provider: low_score_rate
+    params: { group_by: route, score: faithfulness }
+    size: 2
+
+  - id: low_score_by_release
+    board: model_output
+    title: Low-score rate by release
+    display: table
+    provider: low_score_rate
+    params: { group_by: release }
+    size: 2
+
+  - id: low_score_by_route_bar
+    board: model_output
+    title: Low-score rate by route
+    description: All quality dimensions, per route
+    display: bar
+    provider: low_score_rate
+    params: { group_by: route }
+    size: 2
+
+  - id: trace_volume
+    board: model_output
+    title: Trace volume
+    display: line
+    provider: trace_count
+    size: 2
+
+  - id: cost
+    board: model_output
+    title: Avg cost per trace
+    display: stat
+    provider: trace_average
+    params: { field: cost }
+
+  # ── Product Events ──────────────────────────────────────────────────
+  - id: active_users
+    board: product_events
+    title: Active users
+    display: stat
+    provider: metric_stat
+    params: { metric: active_users }
+    default: true
+    ask: why did active_users change compared to the previous period? which entry or platform drove it?
+
+  - id: sessions
+    board: product_events
+    title: Sessions
+    display: stat
+    provider: metric_stat
+    params: { metric: sessions }
+    default: true
+    ask: why did sessions change compared to the previous period? which entry drove it?
+
+  - id: questions
+    board: product_events
+    title: Questions sent
+    display: stat
+    provider: metric_stat
+    params: { metric: questions }
+    default: true
+
+  - id: suggestion_ctr
+    board: product_events
+    title: Suggestion click-through
+    display: stat
+    provider: metric_stat
+    params: { metric: suggestion_ctr }
+    default: true
+    ask: why did suggestion_ctr change compared to the previous period? was it mix or behavior?
+
+  - id: activity_trend
+    board: product_events
+    title: Daily activity
+    display: line
+    provider: metric_trend
+    params: { metrics: [active_users, chat_users, asking_users] }
+    size: 2
+    default: true
+
+  - id: funnel
+    board: product_events
+    title: Assistant funnel
+    description: Distinct users reaching each step
+    display: table
+    provider: funnel
+    params:
+      steps:
+        - { metric: active_users, label: Opened app }
+        - { metric: chat_users, label: Opened chat }
+        - { metric: asking_users, label: Asked a question }
+        - { metric: answered_users, label: Got an answer }
+        - { metric: feedback_users, label: Left feedback }
+    size: 2
+    default: true
+
+  - id: entry_mix
+    board: product_events
+    title: Entry mix
+    description: Where sessions start
+    display: pie
+    provider: metric_breakdown
+    params: { dimension: entry, metrics: [sessions], limit: 6 }
+    size: 2
+    default: true
+    ask: why did sessions change by entry compared to the previous period?
+
+  - id: entry_points
+    board: product_events
+    title: Entry points
+    display: table
+    provider: metric_breakdown
+    params: { dimension: entry, metrics: [sessions, active_users], share: true }
+    size: 2
+    ask: why did sessions change by entry compared to the previous period?
+
+  - id: suggested_questions
+    board: product_events
+    title: Suggested question clicks
+    display: table
+    provider: metric_breakdown
+    params:
+      dimension: suggestion
+      metrics: [suggestion_clicks, suggestion_impressions, suggestion_ctr]
+      filters: { event_name: suggestion_impression }
+    size: 2
+    default: true
+
+  - id: platforms
+    board: product_events
+    title: Platforms
+    display: table
+    provider: metric_breakdown
+    params: { dimension: platform, metrics: [active_users, sessions], share: true }
+    size: 2
+
+  - id: ctr_trend
+    board: product_events
+    title: Suggestion click-through trend
+    display: line
+    provider: metric_trend
+    params: { metrics: [suggestion_ctr] }
+    size: 2
+
+  - id: feedback_users
+    board: product_events
+    title: Users leaving feedback
+    display: stat
+    provider: metric_stat
+    params: { metric: feedback_users }
+
+  - id: funnel_bars
+    board: product_events
+    title: Assistant funnel (bars)
+    display: bar
+    provider: funnel
+    params:
+      steps:
+        - { metric: active_users, label: Opened app }
+        - { metric: chat_users, label: Opened chat }
+        - { metric: asking_users, label: Asked a question }
+        - { metric: answered_users, label: Got an answer }
+        - { metric: feedback_users, label: Left feedback }
+    size: 2
+
+  - id: suggestion_clicks_bar
+    board: product_events
+    title: Top suggested questions
+    display: bar
+    provider: metric_breakdown
+    params:
+      dimension: suggestion
+      metrics: [suggestion_clicks]
+      share: true
+      filters: { event_name: suggestion_impression }
+    size: 2
+
+  - id: platform_mix
+    board: product_events
+    title: Platform mix
+    display: pie
+    provider: metric_breakdown
+    params: { dimension: platform, metrics: [sessions] }
+    size: 2

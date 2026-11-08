@@ -6,3 +6,6 @@ dist/
 *.log
 .DS_Store
 coverage/
+
+# Internal planning notes — never commit
+docs/需求-*.md

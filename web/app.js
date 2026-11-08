@@ -1,44 +1,25 @@
 /**
- * whydid observability dashboard — a static client for the whydid HTTP API.
+ * whydid dashboard — router and the classic views.
  *
- * No build step, no dependencies. All numbers come from POST /tool
- * (deterministic, no LLM); only the Ask view spends LLM tokens via /ask.
+ * Tabs: one per board from GET /boards (see boards.js), plus Metrics (every
+ * metric of the main semantic config, with drill-down and decomposition)
+ * and Ask (full agent investigations). All numbers come from the server's
+ * deterministic tools; only Ask spends LLM tokens.
  *
- * Point it at a remote whydid instance with ?api=https://host:port
- * (CORS is open on the server). If the server sets WHYDID_SERVE_TOKEN,
- * pass ?token=... once — it is kept in sessionStorage.
+ * Point it at a remote whydid instance with ?api=https://host:port. If the
+ * server sets WHYDID_SERVE_TOKEN, pass ?token=... once (kept in sessionStorage).
  */
 (function () {
   'use strict';
 
-  // ── api client ──────────────────────────────────────────────────────
+  const W = window.W;
+  const API = W.API;
+  const headers = W.headers;
+  const getJson = W.getJson;
+  const md = W.md;
 
-  const params = new URLSearchParams(location.search);
-  const API = (params.get('api') || '').replace(/\/+$/, '');
-  if (params.get('token')) sessionStorage.setItem('whydid_token', params.get('token'));
-  const TOKEN = sessionStorage.getItem('whydid_token') || '';
-
-  function headers() {
-    const h = { 'Content-Type': 'application/json' };
-    if (TOKEN) h.Authorization = 'Bearer ' + TOKEN;
-    return h;
-  }
-
-  async function getJson(path) {
-    const r = await fetch(API + path, { headers: headers() });
-    if (!r.ok) throw new Error('HTTP ' + r.status + ' on ' + path);
-    return r.json();
-  }
-
-  async function tool(name, args) {
-    const r = await fetch(API + '/tool', {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ name: name, args: args }),
-    });
-    const body = await r.json();
-    if (body.error) throw new Error(body.error);
-    return body.result;
+  function tool(name, args) {
+    return W.postJson('/tool', { name: name, args: args }).then(function (b) { return b.result; });
   }
 
   // ── dates: UTC full days, half-open [from, to) ──────────────────────
@@ -59,9 +40,7 @@
 
   // ── formatting ──────────────────────────────────────────────────────
 
-  function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
+  const esc = W.esc;
 
   function fmtValue(metric, v) {
     if (v == null) return '—';
@@ -151,72 +130,62 @@
     return '<span class="bar ' + (positive ? 'pos' : 'neg') + '" style="width:' + width + 'px"></span>';
   }
 
-  // ── markdown (tiny subset for /ask reports) ─────────────────────────
-
-  function md(src) {
-    const lines = esc(src).split('\n');
-    const out = [];
-    let inList = false, inTable = false;
-    function closeAll() {
-      if (inList) { out.push('</ul>'); inList = false; }
-      if (inTable) { out.push('</table>'); inTable = false; }
-    }
-    lines.forEach(function (l) {
-      const t = l.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-      if (/^\s*$/.test(l)) { closeAll(); return; }
-      if (/^---+$/.test(l.trim())) { closeAll(); out.push('<hr>'); return; }
-      if (/^###\s/.test(l)) { closeAll(); out.push('<h3>' + t.slice(4) + '</h3>'); return; }
-      if (/^##\s/.test(l)) { closeAll(); out.push('<h2>' + t.slice(3) + '</h2>'); return; }
-      if (/^#\s/.test(l)) { closeAll(); out.push('<h2>' + t.slice(2) + '</h2>'); return; }
-      if (/^\s*[-*]\s/.test(l)) {
-        if (!inList) { out.push('<ul>'); inList = true; }
-        out.push('<li>' + t.replace(/^\s*[-*]\s/, '') + '</li>');
-        return;
-      }
-      if (/^\s*\|/.test(l)) {
-        if (/^\s*\|[\s:|-]+\|\s*$/.test(l)) return;
-        if (!inTable) { out.push('<table>'); inTable = true; }
-        const cells = t.replace(/^\s*\||\|\s*$/g, '').split('|');
-        out.push('<tr><td>' + cells.join('</td><td>') + '</td></tr>');
-        return;
-      }
-      closeAll();
-      out.push('<p>' + t + '</p>');
-    });
-    closeAll();
-    return out.join('');
-  }
-
   // ── state & routing ─────────────────────────────────────────────────
 
   const main = document.getElementById('main');
+  const nav = document.getElementById('nav');
   let health = null;
+  let catalog = null;
   let askPrefill = '';
+  let askBoard = null;
 
   function metricByName(name) {
     return health.metrics.find(function (m) { return m.name === name; }) || null;
   }
 
+  function renderNav(active) {
+    const tabs = (catalog ? catalog.boards : []).map(function (b) {
+      return { href: '#/b/' + b.id, label: b.title, key: 'b/' + b.id };
+    });
+    tabs.push({ href: '#/metrics', label: 'Metrics', key: 'metrics' });
+    tabs.push({ href: '#/ask', label: 'Ask', key: 'ask' });
+    nav.innerHTML = tabs.map(function (t) {
+      return '<a href="' + t.href + '" class="' + (t.key === active ? 'active' : '') + '">' + esc(t.label) + '</a>';
+    }).join('');
+  }
+
+  function onAsk(card, board) {
+    askPrefill = card.ask;
+    askBoard = board.id;
+    location.hash = '#/ask';
+  }
+
   function route() {
-    const hash = location.hash || '#/';
-    document.getElementById('nav-overview').className = hash === '#/ask' ? '' : 'active';
-    document.getElementById('nav-ask').className = hash === '#/ask' ? 'active' : '';
     if (!health) return;
-    if (hash === '#/ask') return renderAsk();
-    const m = hash.match(/^#\/m\/(.+)$/);
-    if (m && metricByName(decodeURIComponent(m[1]))) {
+    const hash = location.hash || '';
+    let m;
+    if ((m = hash.match(/^#\/b\/([a-z0-9_]+)$/)) && catalog &&
+        catalog.boards.some(function (b) { return b.id === m[1]; })) {
+      renderNav('b/' + m[1]);
+      return W.renderBoard(main, catalog, m[1], onAsk);
+    }
+    if (W.agent) W.agent.clearBoard();
+    if (hash === '#/ask') { renderNav('ask'); return renderAsk(); }
+    if ((m = hash.match(/^#\/m\/(.+)$/)) && metricByName(decodeURIComponent(m[1]))) {
+      renderNav('metrics');
       return renderMetric(decodeURIComponent(m[1]));
     }
-    renderOverview();
+    if (hash === '#/metrics' || !catalog) { renderNav('metrics'); return renderOverview(); }
+    location.replace('#/b/' + catalog.boards[0].id);
   }
 
   window.addEventListener('hashchange', route);
 
-  getJson('/healthz')
-    .then(function (h) {
-      health = h;
-      document.getElementById('subline').textContent =
-        'table: ' + h.table + ' · ' + h.metrics.length + ' metrics · deterministic tools behind every number';
+  Promise.all([getJson('/healthz'), getJson('/boards').catch(function () { return null; })])
+    .then(function (r) {
+      health = r[0];
+      catalog = r[1];
+      document.getElementById('subline').textContent = 'deterministic numbers · LLM only explains';
       route();
     })
     .catch(function (e) {
@@ -229,7 +198,7 @@
 
   function renderOverview() {
     main.innerHTML =
-      '<div class="cards">' +
+      '<p class="board-desc">Every metric in <code>' + esc(health.table) + '</code> (from whydid.config.yaml).</p><div class="cards">' +
       health.metrics
         .map(function (m) {
           return (
@@ -287,7 +256,7 @@
       .join('');
 
     main.innerHTML =
-      '<div class="crumb"><a href="#/">Overview</a> / ' + esc(m.label) + '</div>' +
+      '<div class="crumb"><a href="#/metrics">Metrics</a> / ' + esc(m.label) + '</div>' +
       '<div class="panel"><h2>' + esc(m.label) +
       '<span class="softtag">' + m.kind + (m.unit ? ' · ' + esc(m.unit) : '') + '</span></h2>' +
       '<div class="controls">' +
@@ -314,6 +283,7 @@
       renderMetric(name);
     };
     document.getElementById('explain').onclick = function () {
+      askBoard = null;
       askPrefill =
         'why did ' + name + ' change in the last ' + days + ' days compared to the previous ' +
         days + ' days? which ' + detailState.dimension + ' drove it?';
@@ -456,7 +426,8 @@
 
   function renderAsk() {
     const rate = health.metrics.find(function (m) { return m.kind === 'rate'; });
-    const examples = [
+    const board = askBoard && catalog ? catalog.boards.find(function (b) { return b.id === askBoard; }) : null;
+    const examples = board ? [] : [
       'why did ' + (rate ? rate.name : health.metrics[0].name) + ' change in the last 7 days?',
       'why did ' + health.metrics[0].name + ' change last week?',
     ];
@@ -466,10 +437,14 @@
       '<form class="askform" id="form">' +
       '<input type="text" id="q" placeholder="why did the metric change?" autocomplete="off" value="' + esc(askPrefill) + '">' +
       '<button class="primary" type="submit" id="go">Ask</button></form>' +
-      '<div class="examples" id="examples"></div>' +
+      '<div class="examples" id="examples">' +
+      (board ? 'Investigating the <b>' + esc(board.title) + '</b> data · <a id="clear-board">switch to ' + esc(health.table) + '</a>' : '') +
+      '</div>' +
       '<div class="status" id="status"></div>' +
       '<div id="out"></div></div>';
     askPrefill = '';
+    const clear = document.getElementById('clear-board');
+    if (clear) clear.onclick = function () { askBoard = null; renderAsk(); };
 
     const ex = document.getElementById('examples');
     examples.forEach(function (q) {
@@ -497,7 +472,7 @@
       fetch(API + '/ask', {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify(askBoard ? { question: q, board: askBoard } : { question: q }),
       })
         .then(function (r) { return r.json(); })
         .then(function (d) {

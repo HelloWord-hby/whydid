@@ -148,11 +148,97 @@ No Langfuse at hand? `npx tsx scripts/mock-langfuse.ts` serves a deterministic f
 whydid --config presets/langfuse.yaml serve --port 8787
 ```
 
-- **Overview** — every configured metric as a card: last 7 full days, delta vs the previous 7, a 14-day sparkline. The card grid is generated from your config; add a metric to the YAML and it appears.
+- **Model Output board** — how the LLM answers are scored: trace volume, quality-score trends, low-score rate per evaluation dimension, the worst-scored answers with the judge's rationale, thumbs-down rate and comments. Reads Langfuse live when `LANGFUSE_*` keys are set; without keys it shows a built-in synthetic dataset and says so with a *Demo data* badge.
+- **Product Events board** — how people use the product: active users, sessions, entry points, a step funnel, suggested-question clicks. Reads any event table through a whydid semantic config (`presets/app-events.yaml`; `npm run seed` creates the demo table).
+- **Draggable cards** — each board has a card library. Drag cards onto the board or click *Add*, drag a card's header to reorder, change its width, remove it. Layouts are saved per board in the browser (`localStorage`); *Reset layout* restores the default. A 7/14/30-day switch applies to every card on the board.
+- **Metrics** — every metric of the main config as a card: last 7 full days, delta vs the previous 7, a 14-day sparkline. Generated from your config; add a metric to the YAML and it appears.
 - **Metric drill-down** — trend chart with ±2σ outlier markers, switchable window (7/14/30d) and dimension, and the decomposition table: contribution bars for additive metrics, the mix / behavior / interaction split for rates, with the same honesty guards the agent gets (unstable-share warnings, large-interaction warnings).
-- **Ask** — full investigations in the browser, with the report and the expandable tool-call audit trail. One click on any metric pre-fills "why did X change, which dimension drove it?".
+- **Agent panel** — docked next to every board; see [The agent workbench](#the-agent-workbench).
+- **Ask** — the classic single-shot investigation page over the main config, with the report and the expandable tool-call audit trail.
 
-Everything except Ask runs on `POST /tool` — deterministic SQL, no LLM tokens spent by browsing.
+Everything except the agent runs on deterministic code (`GET /cards/:id`, `POST /tool`) — no LLM tokens spent by browsing, and the browser only formats numbers the server computed.
+
+### The agent workbench
+
+The dashboard is the agent's context. Click **✦ Ask** on any card, **✦ Analyze board** in a board's toolbar, or type into the panel, and the agent investigates with tools over every data source the boards read — the semantic SQL sources, Langfuse traces and scores (or the demo dataset), and the cards themselves.
+
+- **Live tool calls.** Each turn streams over Server-Sent Events; every tool call appears as it runs, then folds into "N tool calls" when the answer arrives.
+- **Citations.** Every tool result carries a ref (`#3`). Answers cite numbers as `[#3]`; clicking one opens that exact call with its arguments and raw result.
+- **Grounding check.** The server scans each answer for numbers and looks for them in the tool results (allowing only rounding, %, pp and separators). Numbers it cannot find are shown under the answer. It is code, not an LLM judge.
+- **Card context as evidence.** When you ask about a card, the server runs `read_card` first and records it as tool call #1, so the card's numbers are citable and the window travels as structured parameters, not as words in the question.
+- **Multi-turn.** Follow-ups keep the conversation and continue the ref numbering. Sessions live in server memory (a restart drops them); the browser restores the transcript on reload.
+
+Tools the agent gets:
+
+| Group | Tools |
+|---|---|
+| Semantic sources (any SQL source, `source` argument) | `get_metric`, `get_metric_trend`, `compare_periods`, `decompose_change_additive`, `decompose_change_rate` |
+| Model output (Langfuse / demo) | `score_summary`, `low_score_breakdown`, `score_trend`, `feedback_summary`, `low_score_samples`, `feedback_samples`, `get_trace` |
+| Dashboard | `list_cards`, `read_card` |
+
+Tool results include `next_hints`: drill-down suggestions decided by code from thresholds (a change above 5% → decompose; a low-score rate up 2 pp → read samples there). The LLM decides whether to follow them, which keeps those rules out of the prompt and under unit tests. Sample text (questions, answers, comments) is masked for emails, keys, tokens and phone numbers, truncated, and delivered under an `untrusted` field.
+
+**Prompt architecture.** The system prompt is assembled from layers in `prompts/` plus a catalog generated from your configs:
+
+| Layer | Content | Source |
+|---|---|---|
+| L1 principles | never compute numbers, cite refs, keep directions, honest exit, untrusted content is data | `prompts/01-principles.md` |
+| L2 data catalog | sources, metrics, dimensions, score semantics, boards and cards | generated from the configs |
+| L3 tool policy | which tool for which metric kind, aggregates before samples, budget | `prompts/03-tool-policy.md` |
+| L4 playbooks | `explain_change`, `explain_card`, `board_review`, `sample_review`, `followup` | `prompts/04-playbooks.md` |
+| L5 turn context | today, entry, playbook, board, card, window | per turn, prepended to the user message |
+| L6 output | Conclusion / Evidence / Interpretation / Next step / Limits | `prompts/06-output.md` |
+
+L1–L4 and L6 form the system message and stay identical for the whole process, so prompt caching applies; L5 changes per turn without invalidating it. The playbook is chosen by the UI entry point (card, board, free text), not guessed by the model. The assembled prompt is hashed into a version id that is shown under every answer and returned by `GET /agent/status`.
+
+**Try it without an API key:**
+
+```bash
+npm run demo:agent        # scripted mock LLM + whydid serve on :8787
+```
+
+The mock (`scripts/mock-llm.ts`) is an OpenAI-compatible endpoint that picks tools from the turn context and writes an answer quoting the tool results with refs. Everything else — tool execution, streaming, refs, grounding — is the real pipeline. For real analysis set `WHYDID_LLM_API_KEY` (any OpenAI-compatible endpoint).
+
+Agent routes (`/agent/status`, `POST /agent/sessions`, `GET /agent/sessions/:id`, `POST /agent/sessions/:id/messages`) sit behind `WHYDID_SERVE_TOKEN` like `/ask`.
+
+### Adding a card
+
+Boards and cards live in `whydid.boards.yaml`. A card is configuration only:
+
+```yaml
+cards:
+  - id: platforms                 # lower_snake_case, unique
+    board: product_events         # which tab it belongs to
+    title: Platforms
+    display: table                # stat | line | table | bar | pie
+    provider: metric_breakdown    # which server-side function computes it
+    params: { dimension: platform, metrics: [active_users, sessions], share: true }
+    size: 2                       # default width, 1–4 grid columns
+    default: true                 # on the board by default, otherwise library-only
+    ask: why did active_users change by platform?   # optional Ask-agent preset
+```
+
+Restart `whydid serve` and the card is in the library. The dashboard code does not change. At startup every card is checked against its provider: an unknown provider, a provider used on the wrong kind of board, a display the provider cannot draw, bad params, or a metric/dimension missing from the semantic config stops the server with a message naming the card.
+
+Built-in providers:
+
+| Source | Provider | Displays |
+|---|---|---|
+| Langfuse / demo (`model_output`) | `trace_count` | stat, line |
+| | `trace_average` (`field`: latency or cost), `score_average` (`score`), `negative_feedback` | stat |
+| | `score_trend` (`scores?`) | line |
+| | `low_score_rate` (`group_by`: score, route or release; `score?`) | table, bar |
+| | `score_overview`, `low_score_samples`, `feedback_samples` | table |
+| Semantic config (`semantic`) | `metric_stat` (`metric`, `good_direction?`) | stat |
+| | `metric_trend` (`metrics`) | line |
+| | `metric_breakdown` (`dimension`, `metrics`, `share?`, `limit?`, `filters?`) | table, bar, pie |
+| | `funnel` (`steps`) | table, bar |
+
+The same provider can back several displays, so switching a card from a table to a pie is a one-word change (`display: pie`). Bar and pie draw the first metric of a breakdown. A pie is only accepted for additive metrics — a rate or an average is not a part of a whole, so `display: pie` on one is rejected at startup. Pie shares and the "Other" slice (everything past `limit`) are computed on the server.
+
+When you need a genuinely new kind of number, write one provider in `src/boards/providers/` with `defineProvider()` — a zod params schema, the displays it supports, and a `run` function returning a `stat`/`line`/`table`/`bar`/`pie` payload (`src/boards/charts.ts` builds the last two) — and register it in `providers/index.ts`. Keep the arithmetic in pure, tested functions, as `src/boards/model/aggregate.ts` does.
+
+For live Langfuse data, edit the model source in `whydid.boards.yaml` to match your project: `feedback_score` is the end-user thumbs score and `negative_feedback_value` its "down" value, `low_score_threshold` fits your judge scale, and cards that name a specific `score` need your score names. Only NUMERIC scores count as quality dimensions, because a BOOLEAN like `hallucinated` has unknown polarity. Each fetch is capped at `max_pages` × 100 records per endpoint; when the cap is hit the card says the window is partial.
 
 The dashboard is static files (`web/`, no build step). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one).
 
@@ -163,7 +249,9 @@ The dashboard is static files (`web/`, no build step). It talks to whydid only t
 | `GET /` | The dashboard |
 | `GET /healthz` | Liveness + the semantic layer (metrics with kinds/labels, dimensions, tools) |
 | `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For your own panels. |
-| `POST /ask` | `{"question": "why did X drop?"}` — full investigation; returns the report, the tool-call log, and token usage |
+| `GET /boards` | Board and card catalog from `whydid.boards.yaml`, with each board's default layout |
+| `GET /cards/:id?days=7` | One card's data (7, 14 or 30 days vs the previous equal window), computed server-side |
+| `POST /ask` | `{"question": "why did X drop?", "board"?: "product_events"}` — full investigation; returns the report, the tool-call log, and token usage. `board` runs it against that board's semantic config. |
 
 ```bash
 curl -X POST localhost:8787/ask -d '{"question":"why did score_helpfulness drop in the last 3 days?"}'
@@ -210,7 +298,10 @@ question ──► orchestrator (LLM loop, max 12 turns, history compression)
 - `src/tools/` — the five tools + config-derived JSON schemas, zod-validated at dispatch
 - `src/agent/` — LLM client (any OpenAI-compatible endpoint), system prompt builder, tool loop
 - `src/connectors/langfuse/` — public-API client, pure transforms, incremental sync
-- `src/server.ts` — HTTP mode for dashboards (`/healthz`, `/tool`, `/ask`)
+- `src/boards/` — dashboard boards: config schema, providers, Langfuse/demo model-output source, card service
+- `src/workbench/` — the agent workbench: tool registry, model-output tools, hints, prompt assembly, sessions, grounding check, SSE routes
+- `prompts/` — the prompt layers (L1, L3, L4, L6) as Markdown
+- `src/server.ts` — HTTP mode for dashboards (`/healthz`, `/boards`, `/cards/:id`, `/tool`, `/ask`)
 - `src/demo/` — deterministic synthetic dataset; `scripts/mock-langfuse.ts` — fake Langfuse for local dev
 
 ## Notes

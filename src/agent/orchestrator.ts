@@ -162,7 +162,7 @@ export async function runAgent(
  * tool-calling turns with one-line summaries. The LLM already consumed
  * them; it only needs a reminder of what it asked and roughly what came back.
  */
-function compressOldToolResults(messages: ChatMessage[]): void {
+export function compressOldToolResults(messages: ChatMessage[]): void {
   const toolTurnIndices = messages
     .map((m, i) => (m.role === 'assistant' && m.tool_calls?.length ? i : -1))
     .filter((i) => i >= 0);
@@ -200,7 +200,9 @@ function summarize(toolName: string, content: string): string {
       .map((k) => `${k}=${formatShort(parsed[k])}`);
     if (Array.isArray(parsed.points)) parts.push(`${parsed.points.length} points`);
     if (Array.isArray(parsed.drivers)) parts.push(`${parsed.drivers.length} drivers`);
-    return `[compressed] ${toolName}: ${parts.join(' ') || Object.keys(parsed).join(',')}`;
+    // Keep the citation ref so earlier evidence can still be cited after compression.
+    const ref = typeof parsed.ref === 'string' ? `${parsed.ref} ` : '';
+    return `[compressed] ${ref}${toolName}: ${parts.join(' ') || Object.keys(parsed).join(',')}`;
   } catch {
     return `[compressed] ${toolName}: ${content.slice(0, 120)}`;
   }

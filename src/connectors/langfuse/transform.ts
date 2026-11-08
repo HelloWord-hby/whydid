@@ -31,6 +31,8 @@ export interface LangfuseScore {
   value?: number | null;
   dataType?: string | null;
   timestamp: string;
+  /** Free-text reason attached to the score (judge rationale, user comment). */
+  comment?: string | null;
 }
 
 export interface ConversationRow {

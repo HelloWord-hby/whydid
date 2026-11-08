@@ -89,11 +89,27 @@ program
   .description('Serve the agent over HTTP (GET /healthz, POST /tool, POST /ask)')
   .option('-p, --port <port>', 'port to listen on', '8787')
   .option('--host <host>', 'address to bind (default localhost only)', '127.0.0.1')
-  .action(async (opts: { port: string; host: string }) => {
+  .option('-b, --boards <path>', 'dashboard boards config', 'whydid.boards.yaml')
+  .option('--no-boards', 'serve without dashboard boards')
+  .action(async (opts: { port: string; host: string; boards: string | false }) => {
     const config = loadConfig(program.opts().config);
     const db = getDb(config.timezone);
     const { startServer } = await import('./server.js');
-    startServer(config, db, { port: Number(opts.port), host: opts.host });
+    let boards;
+    let agent;
+    if (opts.boards) {
+      const { createBoardService } = await import('./boards/service.js');
+      const { Workbench, buildWorkbenchEnv } = await import('./workbench/index.js');
+      const { LlmClient } = await import('./agent/llm.js');
+      boards = createBoardService(opts.boards, { db, env: process.env });
+      agent = {
+        workbench: new Workbench(buildWorkbenchEnv(boards, config, db)),
+        llmFactory: () => new LlmClient(),
+        llmConfigured: () => Boolean(process.env.WHYDID_LLM_API_KEY),
+        model: process.env.WHYDID_LLM_MODEL || 'anthropic/claude-sonnet-4.5',
+      };
+    }
+    startServer(config, db, { port: Number(opts.port), host: opts.host, boards, agent });
   });
 
 program

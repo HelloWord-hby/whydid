@@ -117,3 +117,107 @@ export interface AgentStatus {
   prompt_version: string;
   tools: string[];
 }
+
+/** GET /releases (mirrors src/releases/store.ts). */
+export interface ReleaseEntry {
+  id: string;
+  version: string | null;
+  date: string | null;
+  title: string;
+  body: string;
+}
+
+export interface ReleaseLog {
+  origin: 'file' | 'demo' | 'none';
+  file: string;
+  markdown: string;
+  entries: ReleaseEntry[];
+  updated_at: string | null;
+}
+
+/** GET /evals and /evals/runs/:name (mirrors src/evals/*). */
+export interface EvalCase {
+  id: string;
+  note?: string;
+  entry: 'chat' | 'card' | 'board';
+  board?: string;
+  card?: string;
+  days: number;
+  question: string;
+  find: string[][];
+  bonus: string[][];
+  direction?: { subject: string[]; expect: 'up' | 'down' };
+  exit: boolean;
+  language?: 'en' | 'zh';
+  max_tool_calls: number;
+}
+
+export interface EvalSummary {
+  cases: number;
+  passed: number;
+  driverFound: { hit: number; of: number };
+  directionErrors: number;
+  directionChecked: number;
+  honestExit: { hit: number; of: number };
+  numbersChecked: number;
+  numbersUngrounded: number;
+  avgToolCalls: number;
+  avgTokens: number;
+  avgSeconds: number;
+}
+
+export interface EvalRunMeta {
+  date: string;
+  startedAt?: string;
+  model: string;
+  promptVersion: string;
+  dataModes: string;
+  mock: boolean;
+}
+
+export interface EvalCaseScore {
+  id: string;
+  pass: boolean;
+  checks: Record<string, boolean>;
+  bonus: { found: number; total: number };
+  failures: string[];
+  outcome: {
+    answer: string;
+    partial: boolean;
+    error?: string;
+    toolCalls: number;
+    toolErrors: number;
+    grounding: { checked: number; ungrounded: string[] };
+    tokens: number;
+    ms: number;
+  };
+}
+
+export interface EvalRunSummary {
+  name: string;
+  meta: EvalRunMeta;
+  summary: EvalSummary;
+}
+
+export interface EvalRun extends EvalRunSummary {
+  scores: EvalCaseScore[];
+}
+
+export interface EvalStatus {
+  running: boolean;
+  done: number;
+  total: number;
+  current: string | null;
+  started_at: string | null;
+  last_run: string | null;
+  error: string | null;
+}
+
+export interface EvalOverview {
+  cases: EvalCase[];
+  runs: EvalRunSummary[];
+  status: EvalStatus;
+  llm_configured: boolean;
+  model: string;
+  prompt_version: string;
+}

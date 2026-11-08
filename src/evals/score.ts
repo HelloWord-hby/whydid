@@ -40,8 +40,14 @@ const EXIT = ['cannot', "can't", 'can not', 'unable', 'not available', 'no data'
   'not in the', 'no metric', 'insufficient', 'not enough data', 'outside the', 'before the data', 'no records', 'zero in both',
   '无法', '没有数据', '不存在', '没有该指标', '没有这个指标', '数据不足', '不在数据', '没有记录', '无数据'];
 
-function hasTerm(text: string, term: string): boolean {
-  const t = term.toLowerCase();
+/** Typographic apostrophes and quotes as plain ASCII, so "can’t" matches "can't". */
+function plainQuotes(s: string): string {
+  return s.replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"');
+}
+
+function hasTerm(rawText: string, term: string): boolean {
+  const text = plainQuotes(rawText);
+  const t = plainQuotes(term).toLowerCase();
   // ASCII words match at a word start, so "up" does not match "support"; CJK matches anywhere.
   if (/^[a-z0-9 '-]+$/.test(t)) return new RegExp(`(^|[^a-z0-9])${t.replace(/[-]/g, '\\-')}`, 'i').test(text);
   return text.toLowerCase().includes(t);
@@ -51,14 +57,18 @@ const anyTerm = (text: string, list: string[]) => list.some((t) => hasTerm(text,
 
 /** The conclusion: the "Conclusion"/"结论" section, else the first paragraph. */
 export function conclusionOf(answer: string): string {
+  // "## Conclusion" / "## 结论" heading: the text up to the next heading.
+  const heading = /^#{1,4}\s*(conclusion|结论)\s*$([\s\S]*?)(?=^#{1,4}\s|(?![\s\S]))/im.exec(answer);
+  if (heading) return heading[2]!.trim();
   const m = /\*\*(conclusion|结论)\*\*[\s\S]*?(?=\n\s*\*\*[^*\n]+\*\*|$)/i.exec(answer);
   if (m) return m[0];
   return answer.split(/\n\s*\n/)[0] ?? answer;
 }
 
 export function sentencesAbout(text: string, subject: string[]): string[] {
+  // A period ends a sentence only when no digit follows, so "76.71%" stays whole.
   return text
-    .split(/(?<=[.!?。！？；;])\s*|\n+/)
+    .split(/(?<=[!?。！？；;])\s*|(?<=\.)(?!\d)\s*|\n+/)
     .filter((s) => anyTerm(s, subject));
 }
 

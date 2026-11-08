@@ -14,6 +14,27 @@ describe('extractNumbers', () => {
   });
 });
 
+describe('checkGrounding on real answer phrasing', () => {
+  it('treats "percentage points" and 个百分点 as percent, accepts truncation, and skips prose dates', () => {
+    const results = [{ delta: -0.044, rate_a: 0.787365, behavior: -0.04462 }];
+    const en = checkGrounding('Down 4.40 percentage points; integration 78.73% → 78.74%; behavior −4.46 percentage points.', results);
+    expect(en.ungrounded).toEqual([]);
+    expect(checkGrounding('a 4.40 percentage-point decline', results).ungrounded).toEqual([]);
+    const zh = checkGrounding('下降 4.40 个百分点，组内 −4.46 个百分点。', results);
+    expect(zh.ungrounded).toEqual([]);
+    const dates = checkGrounding('No sessions for January 1–8, 2024 or December 25, 2023–January 1, 2024, nor 2024年1月8日.', []);
+    expect(dates.checked).toBe(0);
+    expect(checkGrounding('January 8 exclusive, 2024; baseline December 25, 2023', []).checked).toBe(0);
+    // Counts keep their separators and are still checked.
+    expect(checkGrounding('2,024 sessions', []).ungrounded).toEqual(['2,024']);
+  });
+
+  it('still flags a number that is neither rounded nor truncated from a tool value', () => {
+    expect(checkGrounding('integration fell to 78.80%', [{ rate: 0.787365 }]).ungrounded).toEqual(['78.80%']);
+    expect(checkGrounding('down 5.10 percentage points', [{ delta: -0.044 }]).ungrounded).toEqual(['5.10 percentage points']);
+  });
+});
+
 describe('checkGrounding', () => {
   const results = [{ low_rate: 0.18345, previous_low_rate: 0.021, total: 2166, delta_pct: -5.94, nested: { delta: -0.0541 } }];
 

@@ -8,20 +8,16 @@
  * Needs the seeded demo database (docker compose up -d && npm run seed).
  * The workbench is assembled exactly as `whydid serve` does it: same
  * configs, tools, prompt layers and grounding check. Results go to
- * evals/results/<date>-<model>.md and .json.
+ * evals/results/<date>-<time>-<model>.md and .json; the dashboard's
+ * Evals page lists the same files.
  */
 import 'dotenv/config';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { parse } from 'yaml';
 import { LlmClient } from '../src/agent/llm.js';
-import { createBoardService } from '../src/boards/service.js';
-import { loadConfig } from '../src/config/load.js';
-import { closeDb, getDb } from '../src/db/client.js';
-import { renderReport } from '../src/evals/report.js';
-import { casesFileSchema, outcomeFromEvents, scoreCase, summarize, type CaseScore } from '../src/evals/score.js';
-import { buildWorkbenchEnv, Workbench } from '../src/workbench/index.js';
-import { type AgentEvent } from '../src/workbench/session.js';
+import { Runtime } from '../src/admin/runtime.js';
+import { SettingsStore } from '../src/admin/settings.js';
+import { closePools } from '../src/db/pools.js';
+import { DEFAULT_RESULTS, loadCases, runCases, runName, saveRun } from '../src/evals/run.js';
 
 const args = process.argv.slice(2);
 const mock = args.includes('--mock');
@@ -43,57 +39,57 @@ function startMock(): Promise<ChildProcess> {
 }
 
 async function main(): Promise<void> {
-  const { cases: allCases } = casesFileSchema.parse(parse(readFileSync('evals/cases.yaml', 'utf8')));
+  const allCases = loadCases();
   const cases = only ? allCases.filter((c) => only.has(c.id)) : allCases;
   if (!cases.length) throw new Error('No cases selected.');
 
   let mockProc: ChildProcess | undefined;
+  // Same assembly as `whydid serve`: configs, saved connection settings, release log.
+  const rt = new Runtime({
+    files: { boards: 'whydid.boards.yaml', main: 'whydid.config.yaml' },
+    settings: new SettingsStore(),
+    releasesPath: 'whydid.releases.md',
+  });
+  let llm: LlmClient;
   if (mock) {
     mockProc = await startMock();
-    process.env.WHYDID_LLM_BASE_URL = `http://localhost:${MOCK_PORT}/v1`;
-    process.env.WHYDID_LLM_API_KEY = 'mock';
-    process.env.WHYDID_LLM_MODEL = 'mock-llm';
+    llm = new LlmClient({ baseUrl: `http://localhost:${MOCK_PORT}/v1`, apiKey: 'mock', model: 'mock-llm' });
+  } else {
+    llm = rt.llm();
   }
-  const llm = new LlmClient();
+  const wb = rt.parts.workbench;
 
-  const config = loadConfig('whydid.config.yaml');
-  const db = getDb(config.timezone);
-  const boards = createBoardService('whydid.boards.yaml', { db, env: process.env });
-  const wb = new Workbench(buildWorkbenchEnv(boards, config, db));
-  const modes = boards.catalog().boards.map((b) => `${b.id}=${b.mode}`).join(', ');
-
-  const scores: CaseScore[] = [];
+  const started = new Date();
+  const meta = {
+    date: started.toISOString().slice(0, 10),
+    startedAt: started.toISOString(),
+    model: llm.model,
+    promptVersion: wb.system.version,
+    dataModes: rt.parts.dataModes,
+    mock,
+  };
+  let scores;
   try {
-    for (const c of cases) {
-      const session = wb.createSession();
-      const events: AgentEvent[] = [];
-      const t0 = Date.now();
-      await session.send({ text: c.question, entry: c.entry, board: c.board, card: c.card, days: c.days }, llm, (e) => events.push(e));
-      const score = scoreCase(c, outcomeFromEvents(events, Date.now() - t0));
-      scores.push(score);
-      process.stdout.write(`${score.pass ? 'PASS' : 'FAIL'}  ${c.id.padEnd(28)} ${score.failures.join('; ')}\n`);
-    }
+    scores = await runCases({
+      cases,
+      workbench: wb,
+      llm,
+      onCase: (score) => process.stdout.write(`${score.pass ? 'PASS' : 'FAIL'}  ${score.id.padEnd(28)} ${score.failures.join('; ')}\n`),
+    });
   } finally {
-    await closeDb();
+    await closePools();
     mockProc?.kill();
   }
 
-  const summary = summarize(scores);
-  const date = new Date().toISOString().slice(0, 10);
-  const slug = llm.model.replace(/[^A-Za-z0-9.-]+/g, '-');
-  const meta = { date, model: llm.model, promptVersion: wb.system.version, dataModes: modes, mock };
-  mkdirSync('evals/results', { recursive: true });
-  const base = `evals/results/${date}-${slug}`;
-  writeFileSync(`${base}.md`, renderReport(meta, cases, scores, summary));
-  writeFileSync(`${base}.json`, JSON.stringify({ meta, summary, scores }, null, 2));
-
+  const name = runName(meta, started);
+  const { summary } = saveRun(DEFAULT_RESULTS, name, meta, cases, scores);
   const grounded = summary.numbersChecked - summary.numbersUngrounded;
   process.stdout.write(
     `\n${summary.passed}/${summary.cases} cases passed · driver ${summary.driverFound.hit}/${summary.driverFound.of}` +
       ` · direction errors ${summary.directionErrors}/${summary.directionChecked}` +
       ` · honest exit ${summary.honestExit.hit}/${summary.honestExit.of}` +
       ` · numbers grounded ${grounded}/${summary.numbersChecked}\n` +
-      `Report: ${base}.md${mock ? '  (mock LLM — harness check only)' : ''}\n`
+      `Report: ${DEFAULT_RESULTS}/${name}.md${mock ? '  (mock LLM — harness check only)' : ''}\n`
   );
 }
 

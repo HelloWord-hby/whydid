@@ -25,6 +25,7 @@ import {
   type Entry,
   type Playbook,
 } from './prompt.js';
+import { releaseContextLine } from './release-tools.js';
 import { runAgentTool, toToolSchemas } from './tools.js';
 import { type AgentTool, type WorkbenchEnv } from './types.js';
 
@@ -198,6 +199,7 @@ export class AgentSession {
         board,
         card: card ? { id: card.id, title: card.title } : undefined,
         days,
+        releases: releaseContextLine(this.env),
       });
       this.messages.push({ role: 'user', content: `${ctx}\n\n${turn.text}` });
 

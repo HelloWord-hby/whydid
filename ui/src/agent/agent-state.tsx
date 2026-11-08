@@ -27,6 +27,8 @@ interface AgentState {
   newChat: () => void;
   setBoardContext: (b: TurnContext['board'] | undefined) => void;
   board: TurnContext['board'] | undefined;
+  /** Re-read /agent/status, e.g. after the LLM settings changed. */
+  refreshStatus: () => Promise<void>;
 }
 
 const Ctx = createContext<AgentState | null>(null);
@@ -45,10 +47,16 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const boardRef = useRef(board);
   boardRef.current = board;
 
+  const refreshStatus = useCallback(
+    () =>
+      getJson<AgentStatus>('/agent/status')
+        .then(setStatus)
+        .catch(() => setStatus(null)),
+    []
+  );
+
   useEffect(() => {
-    getJson<AgentStatus>('/agent/status')
-      .then(setStatus)
-      .catch(() => setStatus(null));
+    void refreshStatus();
     const id = sessionRef.current;
     if (!id) return;
     getJson<SessionView>(`/agent/sessions/${id}`)
@@ -126,8 +134,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   }, [running]);
 
   const value = useMemo<AgentState>(
-    () => ({ status, open, setOpen, turns, running, send, newChat, setBoardContext: setBoard, board }),
-    [status, open, turns, running, send, newChat, board]
+    () => ({ status, open, setOpen, turns, running, send, newChat, setBoardContext: setBoard, board, refreshStatus }),
+    [status, open, turns, running, send, newChat, board, refreshStatus]
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

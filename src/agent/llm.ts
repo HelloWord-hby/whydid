@@ -34,7 +34,12 @@ export interface LlmClientOptions {
   baseUrl?: string;
   apiKey?: string;
   model?: string;
+  /** Waits before each retry of a transient failure (tests pass zeros). */
+  retryDelaysMs?: readonly number[];
 }
+
+const REQUEST_TIMEOUT_MS = 120_000;
+const RETRY_DELAYS_MS = [1_000, 4_000] as const;
 
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
@@ -43,6 +48,7 @@ export class LlmClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   readonly model: string;
+  private readonly retryDelays: readonly number[];
 
   constructor(opts: LlmClientOptions = {}) {
     this.baseUrl = (
@@ -58,23 +64,48 @@ export class LlmClient {
     }
     this.apiKey = key;
     this.model = opts.model ?? process.env.WHYDID_LLM_MODEL ?? DEFAULT_MODEL;
+    this.retryDelays = opts.retryDelaysMs ?? RETRY_DELAYS_MS;
+  }
+
+  /**
+   * One request, retried on transient failures: network errors, 429 and 5xx.
+   * Other 4xx mean the request itself is wrong and are reported at once.
+   */
+  private async post(body: string): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      let response: Response | undefined;
+      let networkError: unknown;
+      try {
+        response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+          body,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+      } catch (err) {
+        networkError = err;
+      }
+      const transient = networkError !== undefined || response!.status === 429 || response!.status >= 500;
+      if (!transient || attempt >= this.retryDelays.length) {
+        if (networkError !== undefined) {
+          throw new Error(`LLM API unreachable after ${attempt + 1} attempts: ${networkError instanceof Error ? networkError.message : String(networkError)}`);
+        }
+        return response!;
+      }
+      await new Promise((r) => setTimeout(r, this.retryDelays[attempt]));
+    }
   }
 
   async chat(messages: ChatMessage[], tools: ToolSchema[]): Promise<ChatResponse> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const response = await this.post(
+      JSON.stringify({
         model: this.model,
         messages,
         tools,
         temperature: 0,
         max_tokens: 4096,
-      }),
-    });
+      })
+    );
 
     if (!response.ok) {
       const text = await response.text();

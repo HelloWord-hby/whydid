@@ -11,6 +11,7 @@ import { type Sql } from 'postgres';
 import { type WhydidConfig } from '../config/schema.js';
 import { type BoardService } from '../boards/service.js';
 import { type ToolContext } from '../tools/context.js';
+import { type ReleaseStore } from '../releases/store.js';
 import { assembleSystemPrompt, buildCatalog, loadPromptFiles, type AssembledPrompt, type PromptFiles } from './prompt.js';
 import { AgentSession } from './session.js';
 import { buildAgentTools } from './tools.js';
@@ -24,7 +25,8 @@ export function buildWorkbenchEnv(
   boards: BoardService,
   mainConfig: WhydidConfig,
   db: Sql,
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  releases?: ReleaseStore
 ): WorkbenchEnv {
   const semantic = new Map<string, ToolContext>([[MAIN_SOURCE_ID, { config: mainConfig, db }]]);
   let model: WorkbenchEnv['model'];
@@ -32,7 +34,7 @@ export function buildWorkbenchEnv(
     if (ctx.kind === 'semantic') semantic.set(id, ctx.tool);
     else if (!model) model = { id, ctx };
   }
-  return { boards, semantic, model, now };
+  return { boards, semantic, model, now, ...(releases ? { releases } : {}) };
 }
 
 export class Workbench {

@@ -28,6 +28,11 @@ export function iconFor(card: CatalogCard): LucideIcon {
 
 const cache = new Map<string, CardResponse>();
 
+/** Drop cached card data, e.g. after the configuration changed. */
+export function clearCardCache(): void {
+  cache.clear();
+}
+
 function useCardData(id: string, days: number): { data: CardResponse | null; error: string | null } {
   const key = `${id}|${days}`;
   const [state, setState] = useState<{ key: string; data: CardResponse | null; error: string | null }>(() => ({
@@ -64,7 +69,8 @@ export function BoardCard({ card, size, onResize, onRemove }: {
   onResize: () => void;
   onRemove: () => void;
 }) {
-  const { lang, days, tr } = useApp();
+  const { lang, days, tr, catalog, releases } = useApp();
+  const modelBoard = catalog?.boards.find((b) => b.id === card.board)?.source_kind === 'model_output';
   const { data, error } = useCardData(card.id, days);
   const sortable = useSortable({ id: card.id });
   const style = { transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition };
@@ -109,7 +115,7 @@ export function BoardCard({ card, size, onResize, onRemove }: {
         {error && <p className="px-1 text-[12.5px] text-bad">{error}</p>}
         {!error && !body && <div className="h-24 animate-pulse rounded-lg bg-muted" />}
         {body?.display === 'stat' && <StatBody d={body} />}
-        {body?.display === 'line' && <LineBody d={body} />}
+        {body?.display === 'line' && <LineBody d={body} releases={modelBoard ? releases?.entries : undefined} />}
         {body?.display === 'bar' && <BarBody d={body} />}
         {body?.display === 'pie' && <PieBody d={body} />}
         {body?.display === 'table' && <TableBody d={body} />}

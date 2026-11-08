@@ -1,9 +1,9 @@
 /** Card bodies for each display type. Values are formatted, never recomputed. */
-import { Cell, Line, LineChart, Pie, PieChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Cell, Line, LineChart, Pie, PieChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useApp } from '../app-state';
 import { tl } from '../lib/i18n';
 import { axisLabel, CHART_COLORS, deltaView, fmt } from '../lib/format';
-import { type BarData, type LineData, type PieData, type StatData, type TableData, type ValueFormat } from '../lib/types';
+import { type BarData, type LineData, type PieData, type ReleaseEntry, type StatData, type TableData, type ValueFormat } from '../lib/types';
 import { cn, Empty } from './ui';
 
 function ChartTooltip({ active, payload, label, format }: {
@@ -60,9 +60,22 @@ export function StatBody({ d }: { d: StatData }) {
   );
 }
 
-export function LineBody({ d }: { d: LineData }) {
+/** Releases dated inside the chart's range, one marker per day. */
+export function releaseMarkers(entries: ReleaseEntry[] | undefined, days: string[]): Array<{ x: string; label: string }> {
+  if (!entries?.length || !days.length) return [];
+  const inRange = new Set(days.map((t) => t.slice(0, 10)));
+  const byDay = new Map<string, string[]>();
+  for (const e of entries) {
+    if (!e.date || !inRange.has(e.date)) continue;
+    byDay.set(e.date, [...(byDay.get(e.date) ?? []), e.version ?? e.title.slice(0, 12)]);
+  }
+  return [...byDay].map(([date, labels]) => ({ x: date.slice(5), label: labels.join(' · ') }));
+}
+
+export function LineBody({ d, releases }: { d: LineData; releases?: ReleaseEntry[] }) {
   const { lang } = useApp();
   const days = d.series[0]?.points.map((p) => p.t) ?? [];
+  const markers = releaseMarkers(releases, days);
   if (days.length < 2) return <Empty>—</Empty>;
   const rows = days.map((t, i) => {
     const row: Record<string, string | number | null> = { t: t.slice(5) };
@@ -83,11 +96,22 @@ export function LineBody({ d }: { d: LineData }) {
       )}
       <div className="h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <LineChart data={rows} margin={{ top: markers.length ? 16 : 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="t" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} minTickGap={16} />
             <YAxis width={44} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickFormatter={(v: number) => axisLabel(v, d.format)} domain={['auto', 'auto']} />
             <Tooltip content={<ChartTooltip format={d.format} />} cursor={{ stroke: 'var(--border)' }} />
+            {markers.map((m) => (
+              <ReferenceLine
+                key={m.x}
+                x={m.x}
+                stroke="var(--primary)"
+                strokeDasharray="4 3"
+                strokeOpacity={0.7}
+                label={{ value: m.label, position: 'insideTopRight', fontSize: 10.5, fill: 'var(--primary)' }}
+                ifOverflow="extendDomain"
+              />
+            ))}
             {d.series.map((s, i) => (
               <Line key={s.name} type="monotone" dataKey={s.name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
             ))}

@@ -7,6 +7,8 @@ export interface RunMeta {
   promptVersion: string;
   dataModes: string;
   mock: boolean;
+  /** ISO timestamp; older result files only have `date`. */
+  startedAt?: string;
 }
 
 const pct = (hit: number, of: number) => (of === 0 ? '—' : `${hit}/${of} (${Math.round((hit / of) * 100)}%)`);

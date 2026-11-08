@@ -1,5 +1,5 @@
 /** App shell: collapsible grouped sidebar, inset content panel with a top bar. */
-import { BarChart3, Bot, Languages, LayoutDashboard, Moon, PanelLeft, Sparkles, Sun, Activity, type LucideIcon } from 'lucide-react';
+import { BarChart3, Bot, FlaskConical, Languages, Settings2, LayoutDashboard, Moon, PanelLeft, Rocket, Sparkles, Sun, Activity, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useApp, type Route } from '../app-state';
 import { useAgent } from '../agent/agent-state';
@@ -33,7 +33,7 @@ function NavItem({ icon: Icon, label, active, collapsed, onClick }: {
 }
 
 function Sidebar({ collapsed }: { collapsed: boolean }) {
-  const { catalog, route, go, lang, tr, dark, toggleTheme, setLang, health } = useApp();
+  const { catalog, route, go, lang, tr, dark, toggleTheme, setLang, health, releases } = useApp();
   const isActive = (r: Route) =>
     route?.page === r.page && (r.page !== 'board' || (route.page === 'board' && route.id === r.id));
   return (
@@ -71,10 +71,36 @@ function Sidebar({ collapsed }: { collapsed: boolean }) {
               collapsed={collapsed}
               onClick={() => go({ page: 'metrics' })}
             />
+            {catalog && (
+              <NavItem
+                icon={FlaskConical}
+                label={tr('nav.evals')}
+                active={route?.page === 'evals'}
+                collapsed={collapsed}
+                onClick={() => go({ page: 'evals' })}
+              />
+            )}
+          </nav>
+        </>
+      )}
+      {releases && (
+        <>
+          {!collapsed && <div className="mt-5 mb-1 px-2 text-[11px] font-medium text-muted-foreground">{tr('nav.context')}</div>}
+          <nav className={cn('flex flex-col gap-0.5', collapsed && 'mt-4')}>
+            <NavItem
+              icon={Rocket}
+              label={tr('nav.releases')}
+              active={route?.page === 'releases'}
+              collapsed={collapsed}
+              onClick={() => go({ page: 'releases' })}
+            />
           </nav>
         </>
       )}
       <div className="mt-auto flex flex-col gap-0.5">
+        {catalog && (
+          <NavItem icon={Settings2} label={tr('nav.admin')} active={route?.page === 'admin'} collapsed={collapsed} onClick={() => go({ page: 'admin' })} />
+        )}
         <NavItem icon={dark ? Sun : Moon} label={tr('nav.theme')} active={false} collapsed={collapsed} onClick={toggleTheme} />
         <NavItem icon={Languages} label={tr('nav.language')} active={false} collapsed={collapsed} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} />
       </div>

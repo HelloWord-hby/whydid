@@ -16,3 +16,9 @@ ui/dist/
 
 # Eval runs against the scripted mock are harness checks, not results
 evals/results/*mock*
+# Your own release log (served at /releases); keep it out of the repo.
+whydid.releases.md
+whydid.releases.md.tmp
+
+# Connection settings saved from the admin page (API keys, database URLs)
+.whydid/

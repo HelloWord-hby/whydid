@@ -12,7 +12,7 @@ import { parse } from 'yaml';
 import { type Sql } from 'postgres';
 import { loadConfig } from '../config/load.js';
 import { type WhydidConfig } from '../config/schema.js';
-import { createModelSource, type LangfuseEnv } from './model/source.js';
+import { createModelSource, type LangfuseEnv, type ModelSource } from './model/source.js';
 import { getProvider } from './providers/index.js';
 import { type AnyProvider, type SourceContext } from './providers/types.js';
 import {
@@ -62,8 +62,12 @@ export interface Catalog {
 export interface BoardServiceDeps {
   db?: Sql;
   env?: LangfuseEnv;
-  /** Load a semantic config by absolute path (injectable for tests). */
-  loadSemantic?: (path: string) => WhydidConfig;
+  /** Load a semantic config by absolute path (injectable for tests and draft configs). */
+  loadSemantic?: (path: string, sourceId: string) => WhydidConfig;
+  /** Database for one semantic source; falls back to `db`. */
+  dbFor?: (sourceId: string, timezone: string) => Sql;
+  /** Reuse a model source (keeps its cache across config reloads). */
+  modelSource?: (maxPages: number) => ModelSource;
 }
 
 export function parseBoardsConfig(raw: unknown): BoardsConfig {
@@ -103,7 +107,7 @@ export class BoardService {
       if (src.kind === 'model_output') {
         this.sources.set(id, {
           kind: 'model_output',
-          source: createModelSource(deps.env ?? {}, src.max_pages),
+          source: deps.modelSource?.(src.max_pages) ?? createModelSource(deps.env ?? {}, src.max_pages),
           settings: {
             feedback_score: src.feedback_score,
             negative_feedback_value: src.negative_feedback_value,
@@ -111,10 +115,11 @@ export class BoardService {
           },
         });
       } else {
-        if (!deps.db) throw new Error(`Source "${id}" needs a database connection.`);
-        const semantic = (deps.loadSemantic ?? loadConfig)(resolve(baseDir, src.config));
+        const semantic = (deps.loadSemantic ?? loadConfig)(resolve(baseDir, src.config), id);
+        const db = deps.dbFor?.(id, semantic.timezone) ?? deps.db;
+        if (!db) throw new Error(`Source "${id}" needs a database connection.`);
         this.semanticConfigs.set(id, semantic);
-        this.sources.set(id, { kind: 'semantic', tool: { config: semantic, db: deps.db } });
+        this.sources.set(id, { kind: 'semantic', tool: { config: semantic, db } });
       }
     }
 

@@ -27,6 +27,9 @@ cases:
     find:
       - [rag-answer]
       - [v1.9, "1.9"]
+    # The release log says v1.9 shrank retrieval chunks; a strong answer quotes it.
+    bonus:
+      - [chunk, chunks, 分块, 切块, passages, top-k]
     direction: { subject: [faithfulness, 忠实度], expect: down }
 
   - id: model_thumbs_down_rise

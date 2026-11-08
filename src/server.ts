@@ -13,6 +13,13 @@
  *   GET  /boards   board + card catalog from whydid.boards.yaml
  *   GET  /cards/:id?days=7|14|30  one card's data, computed server-side
  *   /agent/...     workbench agent: sessions and SSE turns (src/workbench/http.ts)
+ *   GET|PUT /releases   the team's release log (src/releases/http.ts)
+ *   /evals/...     regression set: cases, past runs, start a run (src/evals/http.ts)
+ *   /admin/...     configuration back office (src/admin/http.ts)
+ *
+ * Guards (src/http-guard.ts): Host allowlist against DNS rebinding, CORS off
+ * unless WHYDID_CORS_ORIGIN lists origins, cross-site POST/PUT refused, and
+ * configuration routes same-origin only.
  *
  * Defaults to binding 127.0.0.1. If you expose it beyond localhost, set
  * WHYDID_SERVE_TOKEN and put it behind TLS — /ask spends LLM tokens.
@@ -27,6 +34,12 @@ import { parseDays } from './boards/window.js';
 import { readJsonBody, sendJson } from './http-util.js';
 import { handleAgentRoute, type AgentRouteOptions } from './workbench/http.js';
 import { serveUi } from './static-ui.js';
+import { handleReleasesRoute } from './releases/http.js';
+import { type ReleaseStore } from './releases/store.js';
+import { handleEvalsRoute } from './evals/http.js';
+import { type EvalService } from './evals/service.js';
+import { handleAdminRoute, type AdminOptions } from './admin/http.js';
+import { corsOriginFor, hostAllowed, isLoopbackBind, isSameOrigin, isUnwantedCrossSite, parseList, tokenMatches } from './http-guard.js';
 
 export interface ServeOptions {
   port: number;
@@ -35,6 +48,24 @@ export interface ServeOptions {
   boards?: BoardService;
   /** Workbench agent; when absent, /agent routes return 404. */
   agent?: AgentRouteOptions;
+  /** Release log file; when absent, /releases returns 404. */
+  releases?: ReleaseStore;
+  /** Regression set runner; when absent, /evals returns 404. */
+  evals?: EvalService;
+  /** Configuration back office; when absent, /admin returns 404. */
+  admin?: AdminOptions;
+  /** Current main semantic config and its database, when it can change at run time. */
+  main?: () => { config: WhydidConfig; db: Sql };
+  /** Extra Host header values to accept (default: localhost names on a loopback bind). */
+  allowedHosts?: string[];
+  /** Origins allowed to call the API cross-origin; empty means no CORS. */
+  corsOrigins?: string[];
+}
+
+/** Routes that change server state or spend tokens on the server's own behalf. */
+function isProtectedWrite(method: string | undefined, path: string): boolean {
+  if (path.startsWith('/admin/')) return true;
+  return method !== 'GET' && (path === '/releases' || path.startsWith('/evals'));
 }
 
 export function startServer(
@@ -43,6 +74,9 @@ export function startServer(
   opts: ServeOptions
 ): ReturnType<typeof createServer> {
   const token = process.env.WHYDID_SERVE_TOKEN;
+  const loopback = isLoopbackBind(opts.host);
+  const allowedHosts = opts.allowedHosts ?? parseList(process.env.WHYDID_ALLOWED_HOSTS);
+  const corsOrigins = opts.corsOrigins ?? parseList(process.env.WHYDID_CORS_ORIGIN);
 
   const server = createServer((req, res) => {
     void route(req, res).catch((err: unknown) => {
@@ -53,31 +87,45 @@ export function startServer(
   });
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    // Minimal CORS so browser dashboards can call the API directly.
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const path = url.pathname;
+    if (!hostAllowed(req.headers.host, loopback, allowedHosts)) {
+      sendJson(res, 403, { error: 'Unexpected Host header. Set WHYDID_ALLOWED_HOSTS to serve under another name.' });
+      return;
+    }
+    const guarded = isProtectedWrite(req.method === 'OPTIONS' ? 'POST' : req.method, path);
+
+    // CORS only for origins listed in WHYDID_CORS_ORIGIN, never for configuration routes.
+    const allowOrigin = guarded ? null : corsOriginFor(req.headers.origin, corsOrigins);
+    if (allowOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', allowOrigin);
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Vary', 'Origin');
+    }
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end();
       return;
     }
-
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    const path = url.pathname;
+    if (guarded ? !isSameOrigin(req) : isUnwantedCrossSite(req, corsOrigins)) {
+      sendJson(res, 403, { error: 'Cross-origin request refused.' });
+      return;
+    }
+    const { config: mainConfig, db: mainDb } = opts.main?.() ?? { config, db };
     if (await serveUi(req, res, path)) return;
 
     if (req.method === 'GET' && path === '/healthz') {
       sendJson(res, 200, {
         ok: true,
-        table: config.table,
-        metrics: Object.entries(config.metrics).map(([name, m]) => ({
+        table: mainConfig.table,
+        metrics: Object.entries(mainConfig.metrics).map(([name, m]) => ({
           name,
           kind: m.kind,
           label: m.label ?? name,
           unit: m.unit ?? null,
           decompose: m.decompose,
         })),
-        dimensions: Object.entries(config.dimensions).map(([name, d]) => ({
+        dimensions: Object.entries(mainConfig.dimensions).map(([name, d]) => ({
           name,
           label: d.label ?? name,
         })),
@@ -86,7 +134,7 @@ export function startServer(
       return;
     }
 
-    if (token && req.headers.authorization !== `Bearer ${token}`) {
+    if (token && !tokenMatches(req.headers.authorization, token)) {
       sendJson(res, 401, { error: 'Missing or invalid bearer token.' });
       return;
     }
@@ -118,12 +166,39 @@ export function startServer(
       return;
     }
 
+    if (path.startsWith('/admin/')) {
+      if (!opts.admin) {
+        sendJson(res, 404, { error: 'The admin page is not enabled on this server.' });
+        return;
+      }
+      await handleAdminRoute(req, res, path, opts.admin);
+      return;
+    }
+
     if (path.startsWith('/agent/')) {
       if (!opts.agent) {
         sendJson(res, 404, { error: 'The workbench agent is not enabled on this server.' });
         return;
       }
       await handleAgentRoute(req, res, path, opts.agent);
+      return;
+    }
+
+    if (path === '/releases') {
+      if (!opts.releases) {
+        sendJson(res, 404, { error: 'No release log is configured on this server.' });
+        return;
+      }
+      await handleReleasesRoute(req, res, opts.releases);
+      return;
+    }
+
+    if (path === '/evals' || path.startsWith('/evals/')) {
+      if (!opts.evals) {
+        sendJson(res, 404, { error: 'The regression set is not enabled on this server.' });
+        return;
+      }
+      await handleEvalsRoute(req, res, path, opts.evals);
       return;
     }
 
@@ -137,7 +212,7 @@ export function startServer(
       }
       try {
         const result = await executeTool(
-          { config, db },
+          { config: mainConfig, db: mainDb },
           name,
           args as Record<string, unknown>
         );
@@ -154,7 +229,7 @@ export function startServer(
         sendJson(res, 400, { error: 'Body must be {"question": string, "board"?: string}.' });
         return;
       }
-      let askConfig = config;
+      let askConfig = mainConfig;
       if (body.board !== undefined) {
         const boardConfig =
           typeof body.board === 'string' ? opts.boards?.semanticConfigForBoard(body.board) : undefined;
@@ -165,7 +240,7 @@ export function startServer(
         askConfig = boardConfig;
       }
       const started = Date.now();
-      const result = await runAgent(askConfig, db, body.question);
+      const result = await runAgent(askConfig, mainDb, body.question);
       sendJson(res, 200, {
         report: result.report,
         tool_calls: result.tool_calls,

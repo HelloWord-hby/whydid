@@ -3,12 +3,12 @@ import { type IncomingMessage, type ServerResponse } from 'node:http';
 
 export const MAX_BODY_BYTES = 64 * 1024;
 
-export async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+export async function readJsonBody(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Error('Request body too large.');
+    if (size > maxBytes) throw new Error('Request body too large.');
     chunks.push(chunk as Buffer);
   }
   if (chunks.length === 0) return {};

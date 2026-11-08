@@ -34,6 +34,10 @@ export async function getJson<T>(path: string): Promise<T> {
   return parse<T>(await fetch(API + path, { headers: headers() }), path);
 }
 
+export async function putJson<T>(path: string, payload: unknown): Promise<T> {
+  return parse<T>(await fetch(API + path, { method: 'PUT', headers: headers(), body: JSON.stringify(payload) }), path);
+}
+
 export async function postJson<T>(path: string, payload: unknown): Promise<T> {
   return parse<T>(await fetch(API + path, { method: 'POST', headers: headers(), body: JSON.stringify(payload) }), path);
 }

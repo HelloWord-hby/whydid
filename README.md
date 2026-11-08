@@ -245,7 +245,7 @@ Any `title`, `description` or `ask` in `whydid.boards.yaml` can be a string or o
 
 ### The dashboard app
 
-The dashboard lives in `ui/`: React, Vite, Tailwind, Radix primitives, recharts, lucide icons and dnd-kit. `npm run build:ui` builds it into `ui/dist`, which `whydid serve` serves at `GET /` (assets are content-hashed and cached; nothing outside `ui/dist/assets` is reachable). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one). For UI development, run `npm run dev:ui` and open the Vite URL with `?api=http://localhost:8787`. UI unit tests: `npm run test:ui`.
+The dashboard lives in `ui/`: React, Vite, Tailwind, Radix primitives, recharts, lucide icons and dnd-kit. `npm run build:ui` builds it into `ui/dist`, which `whydid serve` serves at `GET /` (assets are content-hashed and cached; nothing outside `ui/dist/assets` is reachable). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one). The server sends no CORS headers unless you list the dashboard's origin in `WHYDID_CORS_ORIGIN` (comma-separated, or `*`). For UI development, run `npm run dev:ui`, start the server with `WHYDID_CORS_ORIGIN` set to the Vite origin, and open the Vite URL with `?api=http://localhost:8787`. The settings page works only same-origin. UI unit tests: `npm run test:ui`.
 
 ### The HTTP API
 
@@ -257,6 +257,11 @@ The dashboard lives in `ui/`: React, Vite, Tailwind, Radix primitives, recharts,
 | `GET /boards` | Board and card catalog from `whydid.boards.yaml`, with each board's default layout |
 | `GET /cards/:id?days=7` | One card's data (7, 14 or 30 days vs the previous equal window), computed server-side |
 | `POST /ask` | `{"question": "why did X drop?", "board"?: "product_events"}` — full investigation; returns the report, the tool-call log, and token usage. `board` runs it against that board's semantic config. |
+| `GET /releases`, `PUT /releases` | The release log: `{origin, markdown, entries}`; `PUT {"markdown": "..."}` replaces the file |
+| `GET /admin/config`, `PUT /admin/config` | Settings page: the editable config bundle, providers with their form fields, masked connection settings; save a draft (validate, write, hot-reload) |
+| `POST /admin/preview`, `PUT /admin/settings`, `POST /admin/test/{llm,database,langfuse}` | Preview a card from a draft; save connection settings; test a connection |
+| `GET /evals` | Regression cases, past runs (summaries), run status |
+| `GET /evals/runs/:name`, `POST /evals/runs` | One run with every answer; start a run in the background (`{"only"?: [ids]}`, spends LLM tokens) |
 
 ```bash
 curl -X POST localhost:8787/ask -d '{"question":"why did score_helpfulness drop in the last 3 days?"}'
@@ -277,6 +282,36 @@ Binds `127.0.0.1` by default. To expose it further, set `WHYDID_SERVE_TOKEN` (be
 | `decompose_change_rate` | Oaxaca-Blinder: splits a rate change into **mix effect** (traffic composition shifted) vs **behavior effect** (segments themselves changed), plus an explicit interaction term — when it exceeds 10% of the change, the split is flagged as approximate |
 
 The mix/behavior distinction is the heart of rate attribution. "Resolution rate dropped" demands completely different action depending on whether cheap-to-resolve traffic went away (mix — nothing broke) or a segment actually got worse (behavior — go find what changed in it).
+
+## Settings page
+
+**Settings** in the sidebar configures the whole stack from the browser, in four tabs:
+
+| Tab | What you set | Saved to |
+|---|---|---|
+| Model | Base URL, API key and model of any OpenAI-compatible chat-completions endpoint with tool calling (presets for OpenAI, OpenRouter, DeepSeek, Kimi, DashScope, GLM), plus a connection test | `.whydid/settings.json` |
+| Data sources | Model-output settings and Langfuse keys (with a test); a database URL per SQL source, a connection test that lists the tables, adding and removing SQL sources | `.whydid/settings.json`, `whydid.boards.yaml` |
+| Semantic layer | Per SQL source: table, time column, timezone, context for the agent, metrics (SQL aggregate or per-row rate) and dimensions, with table and column suggestions read from the database | `whydid.config.yaml`, `presets/*.yaml`, `semantic/<id>.yaml` |
+| Boards & cards | Boards and their source; cards with title (English and Chinese), data type, display, params as form fields, width, default placement, and a live preview computed from the unsaved draft | `whydid.boards.yaml` |
+
+- **Connection settings** (keys, URLs) save immediately. `.whydid/` is gitignored and the file is mode 0600. A saved value overrides `.env`; the page shows where each value comes from and only ever receives masked secrets.
+- **Configuration** (sources, semantic layers, boards, cards) is edited as one draft and saved with *Save and apply*. The server validates the whole draft and builds a complete new set of services from it before writing anything; if any check fails, nothing is written and the error names the part. On success it writes only the files that changed, merging into the existing YAML so comments and layout of untouched entries survive, then hot-swaps boards, agent and eval runner without a restart. Agent conversations start fresh after a reload.
+- **Safety**: there is no login, so the server protects itself against web pages open in your browser:
+  - On a loopback bind it answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`, which stops DNS rebinding. Serve under another name with `WHYDID_ALLOWED_HOSTS`.
+  - No CORS unless `WHYDID_CORS_ORIGIN` is set; cross-site POST/PUT requests are refused, so a page cannot spend tokens through `/ask`.
+  - The settings page needs a loopback bind or `WHYDID_SERVE_TOKEN`, and accepts its own origin only.
+  - A saved key is only sent to the endpoint it was saved for: changing the LLM base URL or the Langfuse host, or testing a different one, needs the key for it in the same request.
+  - Secrets are masked to their last four characters, or fully when short.
+
+## Release notes
+
+Metric shifts often start on a release day, but the data alone does not say what shipped. The **Release notes** page in the sidebar keeps your product's changelog: paste Markdown or upload a README / CHANGELOG. It is stored on the server in `whydid.releases.md` (gitignored; change the path with `whydid serve --releases <file>`), so the agent and `npm run eval` read the same file.
+
+- One heading per release with a version and a date: `## v1.9 — 2026-11-04`, `## [1.2.0] - 2026-11-04` (Keep a Changelog) and `### v2.0（2026年11月4日）` all work. The text under the heading is what changed. Entries without a date are kept but flagged, because they cannot be matched to a change in time.
+- The agent gets a `list_releases` tool and a one-line summary of the log in each turn's context. Its tool policy treats a release on the day a metric moved as a lead, not proof: it checks the data by release before naming one, then quotes what the release changed.
+- Release text is written by people, so it is masked, truncated and passed as untrusted data, like trace text.
+- Model-output line charts mark release days with a dashed line.
+- Without a file, demo mode shows a sample log that matches the demo incident (v1.9 shrank retrieval chunks four days ago).
 
 ## Evaluation
 
@@ -299,7 +334,7 @@ Scoring is code, not an LLM judge (`src/evals/score.ts`):
 | language | a Chinese question gets a Chinese answer |
 | budget / completed | at most 15 tool calls, no error, not cut off at the turn limit |
 
-Each run writes `evals/results/<date>-<model>.md` (summary, per-case checks, full answers) and `.json`, stamped with the prompt version, so prompt changes can be compared run against run. The agent is assembled exactly as `whydid serve` assembles it. The checks are heuristics with stated limits: term matching can miss a correct answer phrased unusually, and the direction check reads the conclusion only.
+Each run writes `evals/results/<date>-<time>-<model>.md` (summary, per-case checks, full answers) and `.json`, stamped with the prompt version, so prompt changes can be compared run against run. The dashboard's **Eval set** page lists the same runs, shows each case's answer and failed checks, and can start a run on the server (`POST /evals/runs`; it asks before spending tokens on a real model). The agent is assembled exactly as `whydid serve` assembles it. The checks are heuristics with stated limits: term matching can miss a correct answer phrased unusually, and the direction check reads the conclusion only.
 
 ## Architecture
 

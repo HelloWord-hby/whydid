@@ -110,3 +110,17 @@ describe('agent helpers', () => {
     expect(presetsFor(card('x', 1, { ask: { en: 'Custom?', zh: '自定义？' } }), 7, 'zh')[0]).toBe('自定义？');
   });
 });
+
+describe('releaseMarkers', () => {
+  it('marks releases dated inside the chart range and joins same-day releases', async () => {
+    const { releaseMarkers } = await import('../components/charts');
+    const entries = [
+      { id: 'r1', version: 'v1.9', date: '2026-11-04', title: 'v1.9', body: '' },
+      { id: 'r2', version: null, date: '2026-11-04', title: 'Hotfix for search', body: '' },
+      { id: 'r3', version: 'v1.8', date: '2026-08-01', title: 'v1.8', body: '' },
+      { id: 'r4', version: 'v2', date: null, title: 'v2', body: '' },
+    ];
+    expect(releaseMarkers(entries, ['2026-11-03', '2026-11-04', '2026-11-05'])).toEqual([{ x: '11-04', label: 'v1.9 · Hotfix for s' }]);
+    expect(releaseMarkers(undefined, ['2026-11-04'])).toEqual([]);
+  });
+});

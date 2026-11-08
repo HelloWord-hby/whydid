@@ -1,13 +1,16 @@
-/** Routes: boards from the catalog, the Metrics overview, and a metric drill-down. */
+/** Routes: boards from the catalog, the Metrics overview, a metric drill-down, release notes and the eval set. */
 import { AgentProvider } from './agent/agent-state';
 import { AgentRail } from './agent/AgentRail';
 import { AppProvider, useApp } from './app-state';
 import { Shell } from './components/Shell';
 import { Empty } from './components/ui';
 import { loc } from './lib/i18n';
+import { AdminPage } from './pages/admin/AdminPage';
 import { BoardPage } from './pages/BoardPage';
+import { EvalsPage } from './pages/EvalsPage';
 import { MetricDetail } from './pages/MetricDetail';
 import { MetricsPage } from './pages/MetricsPage';
+import { ReleasesPage } from './pages/ReleasesPage';
 
 function Routes() {
   const { route, catalog, health, lang, tr, loadError } = useApp();
@@ -34,6 +37,27 @@ function Routes() {
         </Shell>
       );
     }
+  }
+  if (route.page === 'releases') {
+    return (
+      <Shell title={tr('rel.title')} subtitle={tr('rel.sub')} rail={<AgentRail />}>
+        <ReleasesPage />
+      </Shell>
+    );
+  }
+  if (route.page === 'admin') {
+    return (
+      <Shell title={tr('nav.admin')} subtitle={tr('admin.sub')}>
+        <AdminPage />
+      </Shell>
+    );
+  }
+  if (route.page === 'evals') {
+    return (
+      <Shell title={tr('eval.title')} subtitle={tr('eval.sub')}>
+        <EvalsPage />
+      </Shell>
+    );
   }
   if (route.page === 'metric' && health?.metrics.some((m) => m.name === route.name)) {
     const m = health.metrics.find((x) => x.name === route.name)!;

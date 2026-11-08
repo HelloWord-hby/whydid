@@ -94,7 +94,10 @@ function boardsSection(env: WorkbenchEnv): string {
 /** L2 — generated from the configs, so it always matches what the tools accept. */
 export function buildCatalog(env: WorkbenchEnv): string {
   const semantic = [...env.semantic.entries()].map(([id, ctx]) => semanticSection(id, ctx.config));
-  return ['# Data catalog', ...semantic, modelSection(env), '### Dashboard', boardsSection(env)]
+  const releases = env.releases
+    ? '### Release log\nThe team\'s changelog: versions, dates and what changed, written by people and possibly incomplete. Read it with `list_releases`.'
+    : '';
+  return ['# Data catalog', ...semantic, modelSection(env), '### Dashboard', boardsSection(env), releases]
     .filter(Boolean)
     .join('\n\n');
 }
@@ -122,6 +125,8 @@ export interface TurnContext {
   board?: { id: string; title: string };
   card?: { id: string; title: string };
   days: number;
+  /** One-line summary of the release log, when there is one. */
+  releases?: string;
 }
 
 /** Pick the playbook from the entry point; free text keeps the session's last playbook. */
@@ -145,5 +150,6 @@ export function contextBlock(c: TurnContext): string {
   ];
   if (c.board) lines.push(`board: ${c.board.id} ("${c.board.title}")`);
   if (c.card) lines.push(`card: ${c.card.id} ("${c.card.title}")`);
+  if (c.releases) lines.push(c.releases);
   return `<context>\n${lines.join('\n')}\n</context>`;
 }

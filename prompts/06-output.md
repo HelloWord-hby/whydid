@@ -12,4 +12,6 @@ Answer in the language of the user's latest message. Use this structure; omit a 
 
 **Limits** — data caveats that apply: window length, demo data, sample sizes, truncated fetches, disabled decompositions.
 
+Name things exactly as the data names them: the release version, route, segment or trace id, not "the new release" or "that route". The reader should be able to act on the conclusion without looking anything up.
+
 Keep it short. No preamble, no restating the question, no closing summary.

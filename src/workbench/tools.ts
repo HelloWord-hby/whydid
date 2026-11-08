@@ -13,6 +13,7 @@ import { type ToolContext } from '../tools/context.js';
 import { ALLOWED_DAYS } from '../boards/window.js';
 import { hintsForSemantic } from './hints.js';
 import { MODEL_TOOLS } from './model-tools.js';
+import { listReleasesTool } from './release-tools.js';
 import { defineAgentTool, type AgentTool, type WorkbenchEnv } from './types.js';
 
 const SEMANTIC_TOOL_NAMES = [
@@ -52,10 +53,12 @@ function sourceCtx(env: WorkbenchEnv, id: unknown): ToolContext {
 }
 
 function semanticTools(env: WorkbenchEnv): AgentTool[] {
-  const first = env.semantic.values().next().value as ToolContext | undefined;
-  if (!first) return [];
-  const schemas = new Map(buildToolSchemas(first.config).map((s) => [s.function.name, s.function]));
-  return SEMANTIC_TOOL_NAMES.map((name) => {
+  // A tool exists when any source supports it (e.g. rate decomposition needs a rate metric).
+  const schemas = new Map<string, ToolSchema['function']>();
+  for (const ctx of env.semantic.values()) {
+    for (const s of buildToolSchemas(ctx.config)) if (!schemas.has(s.function.name)) schemas.set(s.function.name, s.function);
+  }
+  return SEMANTIC_TOOL_NAMES.filter((name) => schemas.has(name)).map((name) => {
     const base = schemas.get(name)!;
     return defineAgentTool({
       name,
@@ -128,7 +131,13 @@ export const readCardTool = defineAgentTool({
 });
 
 export function buildAgentTools(env: WorkbenchEnv): AgentTool[] {
-  return [...semanticTools(env), ...(env.model ? MODEL_TOOLS : []), listCardsTool, readCardTool];
+  return [
+    ...semanticTools(env),
+    ...(env.model ? MODEL_TOOLS : []),
+    listCardsTool,
+    readCardTool,
+    ...(env.releases ? [listReleasesTool] : []),
+  ];
 }
 
 export function toToolSchemas(tools: AgentTool[]): ToolSchema[] {

@@ -91,25 +91,36 @@ program
   .option('--host <host>', 'address to bind (default localhost only)', '127.0.0.1')
   .option('-b, --boards <path>', 'dashboard boards config', 'whydid.boards.yaml')
   .option('--no-boards', 'serve without dashboard boards')
-  .action(async (opts: { port: string; host: string; boards: string | false }) => {
-    const config = loadConfig(program.opts().config);
-    const db = getDb(config.timezone);
+  .option('-r, --releases <path>', 'release log file (Markdown) the agent can read', 'whydid.releases.md')
+  .option('--settings <path>', 'connection settings saved from the admin page', '.whydid/settings.json')
+  .action(async (opts: { port: string; host: string; boards: string | false; releases: string; settings: string }) => {
+    const configPath = program.opts().config ?? 'whydid.config.yaml';
     const { startServer } = await import('./server.js');
-    let boards;
-    let agent;
-    if (opts.boards) {
-      const { createBoardService } = await import('./boards/service.js');
-      const { Workbench, buildWorkbenchEnv } = await import('./workbench/index.js');
-      const { LlmClient } = await import('./agent/llm.js');
-      boards = createBoardService(opts.boards, { db, env: process.env });
-      agent = {
-        workbench: new Workbench(buildWorkbenchEnv(boards, config, db)),
-        llmFactory: () => new LlmClient(),
-        llmConfigured: () => Boolean(process.env.WHYDID_LLM_API_KEY),
-        model: process.env.WHYDID_LLM_MODEL || 'anthropic/claude-sonnet-4.5',
-      };
+    if (!opts.boards) {
+      const config = loadConfig(configPath);
+      startServer(config, getDb(config.timezone), { port: Number(opts.port), host: opts.host });
+      return;
     }
-    startServer(config, db, { port: Number(opts.port), host: opts.host, boards, agent });
+    const { SettingsStore } = await import('./admin/settings.js');
+    const { Runtime } = await import('./admin/runtime.js');
+    const settings = new SettingsStore(opts.settings);
+    const rt = new Runtime({ files: { boards: opts.boards, main: configPath }, settings, releasesPath: opts.releases });
+    const loopback = ['127.0.0.1', 'localhost', '::1'].includes(opts.host);
+    const { config, db } = rt.parts.main;
+    startServer(config, db, {
+      port: Number(opts.port),
+      host: opts.host,
+      main: () => rt.parts.main,
+      get boards() {
+        return rt.parts.boards;
+      },
+      get releases() {
+        return rt.parts.releases;
+      },
+      agent: rt.agent,
+      evals: rt.evals,
+      admin: { runtime: rt, settings, settingsPath: opts.settings, writable: loopback || Boolean(process.env.WHYDID_SERVE_TOKEN) },
+    });
   });
 
 program

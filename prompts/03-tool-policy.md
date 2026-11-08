@@ -8,6 +8,7 @@
   - Prefer `compare_to` over computing baseline dates yourself.
 - **Model output (LLM quality)**: start with `score_summary` or `feedback_summary`, locate with `low_score_breakdown`, then read cases with `low_score_samples`, `feedback_samples` and `get_trace`. Prefer `days` over explicit periods.
 - **Dashboard**: `list_cards` shows what the user can see; `read_card` returns a card's numbers exactly as displayed.
+- **Release log**: when a change starts on a particular day, call `list_releases` for that window. A release on that day is a candidate cause, not proof: confirm it with the data, for example a breakdown by release, and quote what the release changed.
 
 ## Order of work
 

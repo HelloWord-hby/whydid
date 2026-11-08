@@ -49,6 +49,12 @@ describe('direction check', () => {
     expect(checkDirection('**Conclusion** — Latency fell.', ['faithfulness'], 'down').reason).toMatch(/does not mention/);
   });
 
+  it('reads a "## 结论" heading and keeps decimals inside one sentence', () => {
+    const a = '## 结论\n窗口为 UTC。[#1] resolution_rate 从 **76.71%**[#1] 降至 **72.31%**[#1]，下降 **4.40 个百分点**[#1]。\n\n## 证据\n- 账单组上升';
+    expect(conclusionOf(a)).not.toContain('账单组');
+    expect(checkDirection(a, ['resolution_rate', '解决率'], 'down')).toEqual({ ok: true });
+  });
+
   it('allows the other direction as a cause in the same sentence', () => {
     expect(checkDirection('**Conclusion** — The thumbs-down rate rose because faithfulness fell on rag-answer.', ['thumbs-down'], 'up').ok).toBe(true);
   });
@@ -86,6 +92,8 @@ describe('scoreCase', () => {
     const exit = caseSchema.parse({ id: 'e', question: 'q', exit: true });
     expect(scoreCase(exit, outcome('There is no revenue metric, so this cannot be answered.')).pass).toBe(true);
     expect(scoreCase(exit, outcome('Revenue fell 12% because of billing.')).checks.honest_exit).toBe(false);
+    // Real models use typographic apostrophes.
+    expect(scoreCase(exit, outcome('I can’t determine why revenue dropped: the data has none.')).checks.honest_exit).toBe(true);
     const zh = caseSchema.parse({ id: 'z', question: '为什么？', language: 'zh' });
     expect(scoreCase(zh, outcome('The answer is in English only, which is wrong here.')).checks.language).toBe(false);
   });

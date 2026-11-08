@@ -1,0 +1,335 @@
+{
+  "meta": {
+    "date": "2026-11-08",
+    "startedAt": "2026-11-08T09:29:25.155Z",
+    "model": "gpt-6.1-sol",
+    "promptVersion": "8d44c78e2d86",
+    "dataModes": "model_output=demo, product_events=live",
+    "mock": false
+  },
+  "summary": {
+    "cases": 11,
+    "passed": 11,
+    "driverFound": {
+      "hit": 8,
+      "of": 8
+    },
+    "directionErrors": 0,
+    "directionChecked": 7,
+    "honestExit": {
+      "hit": 2,
+      "of": 2
+    },
+    "numbersChecked": 152,
+    "numbersUngrounded": 0,
+    "avgToolCalls": 5.909090909090909,
+    "avgTokens": 20577.81818181818,
+    "avgSeconds": 28.712363636363637
+  },
+  "scores": [
+    {
+      "id": "model_faithfulness_drop",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 1
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nFaithfulness fell from **0.846 to 0.792**, a change of **−0.054 (−6.37%)** [#1]. The main driver is a faithfulness regression concentrated in `rag-answer`, associated with `v1.9`.\n\nThe current window is **2026-11-01 to 2026-11-08**, versus baseline **2026-10-25 to 2026-11-01**, with end dates exclusive; deltas are current minus baseline [#2].\n\n## Evidence\n- **Overall:** the share of faithfulness scores below **0.5** rose from **1.65% to 7.39%** [#2].\n- **Route:** `rag-answer`’s low-score rate rose from **1.83% to 21.38%**, up **19.55 percentage points** [#3]. Other routes did not show a comparable deterioration [#3].\n- **Release:** `v1.9` had an **11.53%** low-score rate, while `v1.8` remained at **1.56%**, versus **1.65%** in the baseline [#4].\n- **Timing:** the daily average stepped down on **2026-11-04** [#1], the date `v1.9` shipped [#5].\n\n## Interpretation\nThe release log says `v1.9` reduced retrieval context for `rag-answer` and removed the instruction to “only state what the sources say” [#5]. **The likely mechanism is weaker grounding:** less supporting context and a weaker source constraint allow unsupported or contradictory claims.\n\nThe sampled failures support that hypothesis: judge comments flag mixed SDK versions and rate-limit claims contradicting retrieved snippets [#6]. This is strong evidence of an association, not proof of which release change caused it.\n\n## Next step\nTest restoring the grounding instruction and prior retrieval settings for `rag-answer` on `v1.9`, then compare faithfulness before retaining the changes. Use trace `tr_2026-11-05_0229` as a regression case for source contradiction [#7].\n\n## Limits\nThis is a **synthetic demo dataset** [#2]. `v1.9` has no baseline observations [#4], and the inspected trace contains a synthetic placeholder rather than a substantive answer, so the failure mechanism relies on judge annotations and the release log [#7].",
+        "partial": false,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 13,
+          "ungrounded": []
+        },
+        "tokens": 25961,
+        "ms": 22871
+      }
+    },
+    {
+      "id": "model_thumbs_down_rise",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nThe thumbs-down rate **rose from 16.74% to 21.30%, up 4.56 percentage points** [#2]. The current window is **2026-11-01 to 2026-11-08**, compared with the baseline **2026-10-25 to 2026-11-01**, with end dates exclusive [#2]. The strongest lead is **v1.9**: it has worse feedback and more faithfulness failures, though the data does not establish causation.\n\n## Evidence\n- **Overall feedback:** 49 thumbs-down among 230 rated answers, versus 36 among 215 in the baseline [#2].\n- **Release concentration:** v1.9 has a **26.09%** thumbs-down rate, versus **14.13%** for v1.8 in the current window [#3].\n- **Independent quality signal:** faithfulness low-score rate is **11.53%** on v1.9, versus **1.56%** on v1.8; v1.8’s baseline was **1.65%** [#7]. This supports a release-associated quality issue rather than a uniform deterioration.\n- **User complaints:** v1.9 feedback includes nonexistent commands on `chat`—for example, trace `tr_2026-11-07_0185`—and an unanswered question on `rag-answer`, trace `tr_2026-11-07_0082` [#5].\n\n## Interpretation\nThe leading hypothesis is that **v1.9 introduced more unsupported answers**, increasing dissatisfaction. Its changelog records shortened retrieval context and removal of the instruction to state only what the sources say; it shipped on **2026-11-04** [#4]. Those changes fit the faithfulness deterioration, but are not proof of its cause.\n\nThe same release also changed the thumbs-down UI to request an optional reason [#4], so a feedback-collection effect cannot be excluded.\n\n## Next step\nInvestigate v1.9’s grounding/prompt changes and inspect `tr_2026-11-07_0185` and `tr_2026-11-07_0082` [#5]. Test restoring the source-only instruction and prior retrieval configuration, then monitor feedback and faithfulness by release.\n\n## Limits\nThis is **synthetic demo data** [#2]. Feedback covers only rated answers; the available release breakdown does not quantify how much of the overall increase comes from release mix versus within-release changes. The samples illustrate failure modes, not their prevalence.",
+        "partial": false,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 12,
+          "ungrounded": []
+        },
+        "tokens": 24270,
+        "ms": 21788
+      }
+    },
+    {
+      "id": "model_board_review",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nFor **2026-11-01 to 2026-11-08 (exclusive)** [#8], compared with **2026-10-25 to 2026-11-01 (exclusive)** [#8], the biggest movements were worsening **faithfulness** and **thumbs-down rate**. The faithfulness regression concentrates on `rag-answer` and is strongly associated with `v1.9`; the feedback increase has a less certain explanation. This board uses **synthetic demo data**.\n\n## Evidence\nAll changes below are **current minus baseline** [#8].\n\n| Movement | Baseline → current | Change |\n|---|---|---|\n| Thumbs-down rate | 16.74% [#3] → 21.30% [#3] | +4.56 percentage points [#3]; +27.23% relative [#3] |\n| Average faithfulness | 0.8460 [#4] → 0.7922 [#4] | −0.0539 [#4]; −6.37% relative [#4] |\n| Low-faithfulness rate | 1.65% [#8] → 7.39% [#8] | +5.73 percentage points [#8] |\n\nVolume, latency and cost were comparatively stable: traces changed −0.46% [#2], average latency −0.64% [#5], and average cost per trace −0.63% [#7]. Other quality dimensions were broadly steady [#8].\n\n## Interpretation\n**Faithfulness: a localized regression associated with the release.**\n- `rag-answer` low-faithfulness rate rose from **1.83%** [#9] to **21.38%** [#9]; the other routes did not show a comparable deterioration.\n- `v1.9` has **11.53%** [#12] low-faithfulness scores, versus **1.56%** [#12] for `v1.8` in the current window.\n- The daily faithfulness score steps down on **2026-11-04** [#4], matching the `v1.9` release date [#11]. Its changelog says retrieval used smaller chunks and fewer passages, while the prompt dropped the instruction to state only what sources support [#11].\n- Judge rationales on `rag-answer` / `v1.9` describe mixed SDK versions and rate-limit claims contradicting retrieved snippets—for example, `tr_2026-11-05_0229` [#13].\n\n**Hypothesis:** reduced retrieval context and weaker grounding instructions caused more unsupported answers. Timing, route concentration and release breakdown support this, but do not isolate which change caused it.\n\n**Thumbs-down: real increase, unclear cause.** Negative ratings occur across `chat` and `rag-answer`, not solely the faithfulness hotspot [#10]. The release also changed the thumbs-down UI [#11], so answer quality and feedback-collection effects remain possible explanations. The route breakdown lacks baseline route rates, preventing attribution of the increase.\n\n## Next step\n- Test restoring the grounding instruction and prior retrieval settings on **`rag-answer` / `v1.9`**, using `tr_2026-11-05_0229` [#13] as a regression case.\n- Compare feedback before and after the UI change by route, especially `chat` and `rag-answer`, before attributing the entire thumbs-down increase to retrieval.\n\n## Limits\nFeedback covers **230 rated answers** [#10], rather than all **2,166 traces** [#2]. `v1.9` has no baseline low-score rate [#12], and the case descriptions above are judge rationales, not independently verified source audits.",
+        "partial": false,
+        "toolCalls": 14,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 20,
+          "ungrounded": []
+        },
+        "tokens": 31152,
+        "ms": 33415
+      }
+    },
+    {
+      "id": "model_samples_review",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 1,
+        "total": 1
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nThe main shared problem is **faithfulness: answers that mix incompatible documentation or contradict their source**, concentrated in `rag-answer` on `v1.9`. The displayed cases cover November 1–7, 2026 [#1], compared with the baseline October 25–31, 2026 [#2]. These are synthetic demo data.\n\n## Evidence\n| Problem type | Example | Where it concentrates |\n|---|---|---|\n| **Version mixing** — combines SDK versions in one answer | `tr_2026-11-04_0267` [#4] | `rag-answer`, `v1.9`; part of the faithfulness cluster shown on the card [#1] |\n| **Source contradiction** — quotes a rate limit that contradicts the pricing-page snippet | `tr_2026-11-05_0229` [#5] | Same `rag-answer` / `v1.9` cluster [#1] |\n| **Unnecessary verbosity** — long preamble before the answer | `tr_2026-11-02_0042` [#1] | Displayed on `chat`, `v1.8`; unlike `rag-answer`, the overall `chat` low-score rate is essentially stable [#2] |\n\nThe aggregates support the faithfulness pattern:\n- `rag-answer`’s low-score rate increased from **2.91% [#2] baseline to 7.55% [#2] current**, across quality dimensions.\n- Current faithfulness low-score rates are **11.53% [#3] for `v1.9`**, versus **1.56% [#3] for `v1.8`**.\n\n## Interpretation\nThese are primarily **grounding failures**, not simply poorly written answers: the judge flags claims inconsistent with the referenced material. Version mixing and source contradiction could share a context-selection or context-use problem, but that mechanism is a **hypothesis**, not established by these samples. The verbose `chat` case is a separate issue.\n\n## Next step\nInspect retrieved snippets and generated claims for `tr_2026-11-04_0267` and `tr_2026-11-05_0229` [#4][#5], focusing on version consistency and whether the answer preserves source constraints. Build regression tests for those failure types on `rag-answer` / `v1.9`.\n\n## Limits\nThe card deliberately shows the worst-scored cases, not a representative sample. Aggregate breakdowns do not separate version mixing from source contradiction, and the full traces contain synthetic placeholders rather than the underlying answers. `v1.9` also has no baseline faithfulness rate available [#3], so the release comparison is an association, not proof of causation.",
+        "partial": false,
+        "toolCalls": 5,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 4,
+          "ungrounded": []
+        },
+        "tokens": 12501,
+        "ms": 21764
+      }
+    },
+    {
+      "id": "main_resolution_drop",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 2,
+        "total": 2
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nResolution rate fell from **76.71% to 72.31%**, down **4.40 percentage points** [#1], comparing current **2026-11-01–2026-11-08** with baseline **2026-10-25–2026-11-01** [#1] (UTC, end dates exclusive). The strongest driver is worse resolution within **integration** conversations, concentrated on **m-2**, rather than just a shift toward harder conversation types.\n\n## Evidence\n- **Within-intent deterioration dominates:** the approximate behavior effect was **−4.46 pp**, versus a traffic-mix effect of **−0.55 pp**, with a **+0.61 pp** interaction [#2].\n- **integration** resolution fell from **78.74% to 60.93%** [#2]. Its within-segment deterioration contributed **−2.89 pp**, the largest negative behavior contribution [#2].\n- Within current **integration** traffic, **m-2** resolved **47.76%**, versus **76.97%** for **m-1** [#4]. **m-2** served **54.92%** of those conversations [#4].\n- Other declines contributed: **how_to** resolution fell from **87.83% to 83.96%**, and **account** from **83.33% to 76.15%** [#2]. **billing** improved, so it is not the deterioration to prioritize [#2].\n\n## Interpretation\nThe assistant is resolving fewer conversations without human handoff, especially for integration help. **m-2 integration performance is the leading investigation target**, but this comparison does not prove the model caused the decline: routing or case difficulty could differ between models.\n\nThe logged **v1.9** release shipped on **2026-11-04** [#6], while lower daily resolution was already visible on **2026-11-01** [#5]. It therefore cannot explain the start of the decline; no supplied evidence links that release to **m-2**.\n\n## Next step\nAudit unresolved **integration** conversations on **m-2**, comparing their case difficulty and handoff reasons with **m-1**. If comparable cases confirm the gap, test routing integration traffic back to **m-1**.\n\n## Limits\nThe decompositions flag substantial interaction effects, so their attribution is approximate [#2][#4]. **m-2** has no baseline traffic, which prevents a clean before/after model comparison [#3]. The release log is labelled demo data [#6].",
+        "partial": false,
+        "toolCalls": 6,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 16,
+          "ungrounded": []
+        },
+        "tokens": 24245,
+        "ms": 28959
+      }
+    },
+    {
+      "id": "main_resolution_drop_zh",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "language": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "**结论** — 在 **2026-11-01 至 2026-11-08** 的当前窗口，相比基线 **2026-10-25 至 2026-11-01**，`resolution_rate` **下降**了 **4.4 个百分点**：从 **76.7%** 降至 **72.3%**。[#1] 主要是**结构变化叠加分组自身变差**，但按现有分解，结构变化更像首要因素；由于交互项较大，具体比例只能近似判断。[#2][#3]\n\n**证据**\n\n- 按 `model_version` 看，基线窗口的 **2,143** 个会话全部来自 `m-1`；当前窗口为 `m-2` **1,416** 个、`m-1` **1,076** 个。[#6][#7] 这说明流量结构明显转向 `m-2`。\n- 当前窗口中，`m-1` 的 `resolution_rate` 为 **73.4%**，低于基线 `m-1` 的 **76.7%**；`m-2` 当前为 **71.5%**。[#8][#9] 因此并非只有结构变化，已有分组的自身表现也变差。\n- 按 `intent` 分解，行为效应为 **−4.5 个百分点**，混合效应为 **−0.6 个百分点**；但交互项为 **+0.6 个百分点**，工具明确提示交互项相对总变化较大，因此这两个效应是近似拆分。[#2]\n- 最大的负向 intent 贡献来自：\n  - `integration`：自身率从 **78.7%** 降至 **60.9%**，行为贡献约 **−2.9 个百分点**。[#2]\n  - `how_to`：从 **87.8%** 降至 **84.0%**，行为贡献约 **−1.2 个百分点**。[#2]\n  - `account`：从 **83.3%** 降至 **76.1%**，行为贡献约 **−0.8 个百分点**。[#2]\n- `billing` 的占比从 **14.1%** 上升到 **22.6%**，但其自身率从 **72.9%** 上升到 **74.8%**；它不是下降的直接问题，反而部分抵消了下降。[#2]\n- `model_version` 分解也提示结构变化占主导，但由于 `m-2` 在基线中没有流量、交互项达到 **42.5 个百分点**，该分解不稳定，不能把下降精确归因给某个单独效应。[#3]\n\n**解释** — 目前最合理的因果链是：流量从 `m-1` 转向表现较低的 `m-2`，造成结构性拖累；同时 `m-1` 自身也从 **76.7%** 降到 **73.4%**，而 `integration`、`how_to`、`account` 等 intent 的解决率同步走弱。因此答案不是“纯结构变化”，也不是“单一分组崩坏”，而是**结构转移为主要线索，多个 intent 的行为恶化共同加重下降**。[#2][#8][#9]\n\n发布日志显示 `v1.9` 在 **2026-11-04** 发布；日志标注为 demo 数据，且其中的变更不能仅凭当前 `model_version` 结果证明是原因。[#4]\n\n**下一步** — 优先按 `m-2` 再拆分 `intent`，重点检查 `m-2 × integration`，并将 **2026-11-04** 前后分别比较；同时对 `m-1 × integration` 做同样检查，以区分是 `m-2` 的流量结构问题，还是 `integration` 在两个版本中都发生了行为退化。\n\n**限制** — 分解结果带有较大的交互项，混合效应与行为效应只能作方向性判断；当前证据也没有把 `model_version` 与发布版本 `v1.9` 建立一一对应关系。",
+        "partial": false,
+        "toolCalls": 9,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 28,
+          "ungrounded": []
+        },
+        "tokens": 21049,
+        "ms": 89366
+      }
+    },
+    {
+      "id": "main_conversations_growth",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nConversations **grew by 349 [#1] (+16.29% [#1])**, primarily because of increased **Billing** inquiries. The current window is November 1–7, 2026 [#1], versus the baseline October 25–31, 2026 [#1], in UTC.\n\n## Evidence\n| Segment | Baseline → current conversations | Contribution to growth |\n|---|---:|---:|\n| All conversations | 2,143 → 2,492 [#1] | +349 [#1] |\n| Billing | 303 → 563 [#2] | +260 [#2]; 74.5% of net growth [#2] |\n| Refund request | 145 → 196 [#2] | +51 [#2] |\n| Bug report | 311 → 342 [#2] | +31 [#2] |\n\nBilling growth occurred across channels: **web added 148 conversations [#4]**, app added 87 [#4], and api added 25 [#4]. This is not confined to a single channel.\n\n## Interpretation\nThe increase is mainly a rise in billing-related support demand, rather than broad-based growth across every intent. Billing volume stepped up on November 3 [#5] and peaked at 124 conversations [#5] on November 5 [#5], which the trend tool flagged as unusually high.\n\nThe release log lists v1.9 [#6] on November 4 [#6], with retrieval, prompt, and feedback-UI changes. Billing growth began before that release, so the timing does **not** establish it as the cause.\n\n## Next step\nInvestigate **Billing inquiries on web**, the largest contributing channel, focusing on the elevated period starting November 3 [#5]. Check billing tickets and operational logs for invoice, payment, or subscription incidents; those are hypotheses, not causes established by this data.\n\n## Limits\nThe data identifies **where** growth came from, but not the underlying billing issue or whether these were repeat contacts. The release-log result is labelled demo data.",
+        "partial": false,
+        "toolCalls": 6,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 19,
+          "ungrounded": []
+        },
+        "tokens": 29959,
+        "ms": 30610
+      }
+    },
+    {
+      "id": "events_sessions_push",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "driver": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nSessions were **up 12.69% [#1]**, from **4,751 to 5,354 [#1]**, in the current window **2026-11-01 to 2026-11-08 [#1]** versus the baseline **2026-10-25 to 2026-11-01 [#1]** (UTC, end dates exclusive). **Push notification entry drove 78.94% of the net growth [#2]**.\n\n## Evidence\n| Entry point | Baseline → current sessions | Change |\n|---|---:|---:|\n| Push notification | 605 → 1,081 [#2] | +476 [#2] |\n| Chat tab | 1,184 → 1,240 [#2] | +56 [#2] |\n| Shared link | 344 → 395 [#2] | +51 [#2] |\n| Home screen | 2,118 → 2,157 [#2] | +39 [#2] |\n| Search | 500 → 481 [#2] | −19 [#2] |\n\nWithin `push`, growth occurred across all platforms: **android +225 [#4]**, **ios +160 [#4]**, and **web +91 [#4]**. Android was the largest contributor.\n\n## Interpretation\nThe increase was primarily more sessions **starting from push notifications**, rather than broad growth across entry points. A notification campaign, delivery change, or stronger engagement is a plausible explanation—but the available data does not distinguish those hypotheses.\n\nThe release log describes retrieval, prompt, and feedback-UI changes, not a push-notification change [#5], so it does not establish a release-driven cause.\n\n## Next step\nCheck push campaign sends, delivery rates, and notification-open rates, starting with `android` and then `ios`. That will help distinguish increased notification volume from better engagement.\n\n## Limits\nSession attribution identifies the growth driver, not the underlying cause. The release log is labelled demo data and may be incomplete [#5].",
+        "partial": false,
+        "toolCalls": 5,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 22,
+          "ungrounded": []
+        },
+        "tokens": 21954,
+        "ms": 24116
+      }
+    },
+    {
+      "id": "events_ctr_up",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "direction": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "## Conclusion\nSuggestion click-through is **UP versus the baseline**, from 8.52% to 9.92%, a gain of 1.39 percentage points [#1]. The comparison uses current **2026-11-01 to 2026-11-08** versus baseline **2026-10-25 to 2026-11-01**, with end dates exclusive [#1].\n\nThe main driver was higher click-through within entry points and suggested questions—not a more favorable traffic mix.\n\n## Evidence\n| Finding | Baseline → current |\n|---|---|\n| Within-entry improvement dominates | Behavior effect: **+1.39 pp**; traffic-mix effect: **−0.009 pp** [#2] |\n| `home` had the largest within-entry contribution | CTR: 8.38% → 10.31%; behavior contribution: **+0.77 pp** [#2] |\n| `push` improved and gained impression share | CTR: 8.19% → 9.82%; impression share: 8.96% → 13.80% [#2] |\n| Largest suggested-question contributor overall: “Why is my webhook failing?” | CTR: 8.10% → 10.38%; total contribution: **+0.37 pp** [#3] |\n| Within `push`, that same webhook question was the main contributor | CTR: 3.10% → 10.73%; contribution to `push` CTR: **+1.24 pp** [#4] |\n\n## Interpretation\nUsers clicked suggestions more often within the existing entry points, especially `home`. The growing `push` share also contributed positively, but shifts across entry points largely canceled out overall [#2]. The webhook suggestion is the clearest question-level improvement, including within `push` [#3][#4].\n\nThis identifies **where the gain came from**, not what caused users to respond differently. The returned release entry, `v1.9`, describes retrieval, answer-prompt, and feedback changes—not a suggestion change—so it does not establish the cause [#5].\n\n## Next step\nInspect suggestion placement, wording, and targeting changes for `home` and for **“Why is my webhook failing?”** within `push`. Validate those changes experimentally before attributing the improvement to them.\n\n## Limits\nThe decompositions are descriptive, not causal; no statistical-significance result was returned. The release log is demo-labeled [#5].",
+        "partial": false,
+        "toolCalls": 5,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 18,
+          "ungrounded": []
+        },
+        "tokens": 21159,
+        "ms": 24527
+      }
+    },
+    {
+      "id": "exit_unknown_metric",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "honest_exit": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "**Conclusion** — I can’t determine why revenue dropped—or verify the drop—from the available data. The catalog has conversation, product-usage, and model-quality metrics, but no revenue metric.\n\n**Next step** — Connect billing or payment data with revenue, transaction dates, and breakdowns such as plan, customer segment, refunds, and currency. Then I can compare the requested week with the preceding week and identify which segments drove the change.\n\n**Limits** — Lower usage or answer quality would not, by itself, establish a revenue decline or its cause. No revenue window was analyzed.",
+        "partial": false,
+        "toolCalls": 0,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 0,
+          "ungrounded": []
+        },
+        "tokens": 4665,
+        "ms": 9392
+      }
+    },
+    {
+      "id": "exit_no_data",
+      "pass": true,
+      "checks": {
+        "completed": true,
+        "honest_exit": true,
+        "grounded": true,
+        "budget": true
+      },
+      "bonus": {
+        "found": 0,
+        "total": 0
+      },
+      "failures": [],
+      "outcome": {
+        "answer": "**Conclusion** — The available data does not show a sessions drop. For January 1–8, 2024 [#1] (end date exclusive), sessions are **flat versus the baseline**, December 25, 2023–January 1, 2024 [#1].\n\n**Evidence** — The `events` source returns **0 sessions in both periods** [#1], with a change of **0** [#1]. A percentage change is unavailable.\n\n**Limits** — These results cannot distinguish genuinely absent activity from missing historical coverage, so they cannot explain the reported drop.\n\n**Next step** — Check whether `app_events` contains historical data for the requested dates and whether the chart you saw uses the same sessions source.",
+        "partial": false,
+        "toolCalls": 1,
+        "toolErrors": 0,
+        "grounding": {
+          "checked": 0,
+          "ungrounded": []
+        },
+        "tokens": 9441,
+        "ms": 9028
+      }
+    }
+  ]
+}

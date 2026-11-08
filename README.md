@@ -1,19 +1,57 @@
 # whydid
 
-An attribution agent that answers **"why did my metric change?"** over your product's event data.
+**An agent workbench for AI-product metrics.** Ask why a number moved. An agent investigates with deterministic tools over your data — LLM quality scores from Langfuse, product events in PostgreSQL, your release notes — and every number in its answer links to the tool call that produced it.
 
-Deterministic SQL does all the math. The LLM only decides which tool to call and narrates the results. It cannot compute a number, cannot write SQL, and cannot reference a metric that doesn't exist in your config.
+English · [中文](README.zh-CN.md)
 
+![The Model Output board, with the agent explaining a faithfulness drop and citing each number](docs/screenshots/agent-workbench.jpg)
+
+- **Numbers come from code, not the model.** SQL and pure functions compute every figure, including additive and Oaxaca-Blinder decompositions. The LLM picks tools and narrates. A grounding check in code matches every number in the answer against the tool results.
+- **Boards you configure, an agent that reads them.** A model-output board and a product-events board with draggable cards, defined in YAML or on the Settings page. The agent reads the same cards and data the user sees.
+- **Context beyond the data.** Paste your changelog. When a metric moves on a given day, the agent checks what shipped, and treats a release as a lead to verify, not as proof.
+- **A regression set scored by code.** Eleven questions with known answers, checked for the driver, the direction, honest exits, grounded numbers, answer language and tool budget, and stamped with the prompt version.
+
+## Results
+
+The regression set on the seeded demo data, run 2026-11-08 with prompt version `8d44c78e2d86`:
+
+| Measure | Result |
+|---|---|
+| Cases passed | 11 / 11 |
+| Driver found | 8 / 8 |
+| Direction stated wrong or missing | 0 of 7 |
+| Honest exit when the data cannot answer | 2 / 2 |
+| Numbers traceable to a tool result | 152 / 152 |
+| Avg tool calls · tokens · seconds per case | 5.9 · 20,578 · 28.7 |
+
+Model as reported by the OpenAI-compatible endpoint: `gpt-6.1-sol`. The full report, with every answer, is in [evals/published](evals/published/2026-11-08-092925-gpt-6.1-sol.md). Run `npm run eval` against your own endpoint to reproduce it.
+
+A perfect score also says the set is too easy to separate strong models; harder cases (stacked causes, cross-source questions, leading questions) are next. Getting here meant testing the scorer as much as the agent: the first real run passed 6/11, and most failures were the checker misreading correct answers — typographic apostrophes, "percentage points", dates written out in prose. One failure was real: an answer that said "the new release" without naming v1.9, fixed in the output prompt. See [Evaluation](#evaluation).
+
+## Try it — no API key needed
+
+Requirements: Node 20+ and Docker.
+
+```bash
+git clone https://github.com/HelloWord-hby/whydid && cd whydid
+npm install
+docker compose up -d     # PostgreSQL on port 5433
+npm run seed             # 60 days of synthetic conversations and product events
+npm run demo:agent       # builds the dashboard once, then serves it with a scripted mock LLM
 ```
-$ whydid ask "why did resolution_rate drop in the last 7 days?"
 
-**Conclusion** — Resolution rate fell 4.9pp (78.2% → 73.3%) over 2026-07-25 ~ 08-01
-vs the prior week. It is almost entirely a behavior effect concentrated in
-`integration` conversations served by model m-2.
+Open http://localhost:8787. Boards, metrics, release notes, the eval set and the settings page all work on demo data. The scripted mock shows the agent's tool flow but does no reasoning; to use a real model, open **Settings → Model**, pick a preset or enter any OpenAI-compatible endpoint with tool calling, test it and save.
 
-**Facts** — decompose_change_rate by intent: behavior_effect −4.1pp (of which
-integration −3.6pp), mix_effect −0.8pp (billing share grew from 15% → 21%). ...
-```
+The demo data hides incidents with known causes:
+
+1. Release v1.9, four days ago, lowers faithfulness on the `rag-answer` route and draws more thumbs-down.
+2. Model `m-2` lowers the resolution rate of `integration` conversations (a behavior effect) while billing traffic grows (a mix effect).
+3. A suggested-questions redesign lifts click-through, and a push campaign lifts sessions.
+
+| | |
+|---|---|
+| ![Product Events board](docs/screenshots/product-events-board.jpg) | ![Eval set page](docs/screenshots/eval-set.jpg) |
+| ![Release notes](docs/screenshots/release-notes.jpg) | ![Settings: card editor with live preview](docs/screenshots/settings-card-editor.jpg) |
 
 ## Why this exists
 
@@ -35,46 +73,29 @@ Design rules that fall out of this:
 - **Tools carry `direction_note`.** Each comparison result states in words which period is the baseline and which way the metric moved. The narrator's one job is to not flip the sign — so the tools make the sign impossible to misread.
 - **Metric-kind routing.** Count metrics decompose additively; rate metrics decompose via Oaxaca-Blinder. Using the wrong tool is rejected as a type error, because the result would be math-shaped nonsense.
 
-## Quickstart (synthetic demo)
+## Running it with a real model
 
-Requirements: Node 20+, Docker, an API key for any OpenAI-compatible endpoint with tool calling (OpenRouter, OpenAI, ...).
+Set the LLM on the Settings page, or in `.env` (`cp .env.example .env`, then `WHYDID_LLM_BASE_URL`, `WHYDID_LLM_API_KEY`, `WHYDID_LLM_MODEL`). Any OpenAI-compatible chat-completions endpoint with tool calling works. Then serve the dashboard:
 
 ```bash
-git clone https://github.com/<you>/whydid && cd whydid
-npm install
-docker compose up -d            # PostgreSQL on localhost:5433
-cp .env.example .env            # add your WHYDID_LLM_API_KEY
-npm run seed                    # synthetic conversations + product events
 npm run build:ui                # build the dashboard once (ui/, React)
 npm run dev -- serve            # dashboard + API on http://localhost:8787
 ```
 
-Open http://localhost:8787 — boards for model output and product events, a metrics overview with one-click decomposition, and an agent rail that investigates any card. No LLM key yet? `npm run demo:agent` runs everything against a scripted mock. Prefer the terminal?
+Prefer the terminal?
 
 ```bash
 npm run dev -- ask "why did resolution_rate drop in the last 7 days?" --verbose
-```
-
-The seed injects two findable incidents into the final week:
-
-1. A model rollout (`m-2`) that tanks resolution of `integration` conversations — a **behavior effect**.
-2. A billing-traffic surge — a **mix effect** on rates and the growth driver of volume.
-
-Ask about them:
-
-```bash
-npm run dev -- ask "why did conversations grow last week?"
 npm run dev -- ask "did the m-2 rollout change anything?"
-npm run dev -- ask "why did resolution_rate drop? was it traffic mix or did something break?"
 ```
 
-No LLM key? The deterministic layer works standalone:
+The deterministic layer works without any LLM. The seed covers the 60 days before you ran it, so pick two recent weeks:
 
 ```bash
 npm run dev -- tool decompose_change_rate --args '{
   "metric": "resolution_rate",
-  "period_a": {"from": "2026-07-18", "to": "2026-07-25"},
-  "period_b": {"from": "2026-07-25", "to": "2026-08-01"},
+  "period_a": {"from": "<14 days ago>", "to": "<7 days ago>"},
+  "period_b": {"from": "<7 days ago>", "to": "<today>"},
   "dimension": "intent"
 }'
 ```
@@ -334,7 +355,19 @@ Scoring is code, not an LLM judge (`src/evals/score.ts`):
 | language | a Chinese question gets a Chinese answer |
 | budget / completed | at most 15 tool calls, no error, not cut off at the turn limit |
 
-Each run writes `evals/results/<date>-<time>-<model>.md` (summary, per-case checks, full answers) and `.json`, stamped with the prompt version, so prompt changes can be compared run against run. The dashboard's **Eval set** page lists the same runs, shows each case's answer and failed checks, and can start a run on the server (`POST /evals/runs`; it asks before spending tokens on a real model). The agent is assembled exactly as `whydid serve` assembles it. The checks are heuristics with stated limits: term matching can miss a correct answer phrased unusually, and the direction check reads the conclusion only.
+Each run writes `evals/results/<date>-<time>-<model>.md` (summary, per-case checks, full answers) and `.json`, stamped with the prompt version, so prompt changes can be compared run against run. Local runs are gitignored; a run worth publishing is copied to `evals/published/`. The dashboard's **Eval set** page lists the same runs, shows each case's answer and failed checks, and can start a run on the server (`POST /evals/runs`; it asks before spending tokens on a real model). The agent is assembled exactly as `whydid serve` assembles it. The checks are heuristics with stated limits: term matching can miss a correct answer phrased unusually, and the direction check reads the conclusion only.
+
+The first run against a real model passed 6 of 11. Reading every failed answer showed that most were the scorer's mistakes, not the agent's, so the scorer was fixed first, each fix with a test:
+
+| Scorer mistake | Fix |
+|---|---|
+| "can’t" with a typographic apostrophe did not count as an honest exit | Quotes are normalized before matching |
+| "4.40 percentage points", "percentage-point", "个百分点" were not read as percentages | All of them mark a value shown ×100 |
+| "January 1–8, 2024" made 2024 and 25 look like ungrounded numbers | Dates written out in English or Chinese, and bare years, are skipped |
+| 78.73% for a tool value of 0.787365 was rejected | A value truncated to the shown precision counts as grounded |
+| A `## 结论` heading was not found, and "76.71%" split a sentence in two | Markdown headings are read; a period followed by a digit does not end a sentence |
+
+One failure was the agent's: an answer described "the new release" without naming v1.9. The output prompt now asks the agent to name versions, routes and segments as the data names them. A network error that failed a whole case led to retries on transient LLM errors.
 
 ## Architecture
 

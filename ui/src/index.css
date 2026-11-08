@@ -1,0 +1,170 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens: warm cream surface, terracotta primary ─────────────── */
+:root {
+  --background: oklch(0.98 0.01 93);
+  --foreground: oklch(0.34 0.03 94);
+  --card: oklch(0.98 0.01 93);
+  --popover: oklch(1 0 0);
+  --primary: oklch(0.62 0.14 39);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.92 0.01 87);
+  --muted: oklch(0.95 0.01 90);
+  --muted-foreground: oklch(0.49 0.015 91);
+  --border: oklch(0.91 0.01 106);
+  --sidebar: oklch(0.965 0.012 90);
+  --sidebar-accent: oklch(0.93 0.015 85);
+  --good: oklch(0.6 0.13 160);
+  --bad: oklch(0.6 0.19 15);
+  --warn: oklch(0.7 0.14 70);
+  --chart-1: oklch(0.62 0.14 39);
+  --chart-2: oklch(0.65 0.15 250);
+  --chart-3: oklch(0.7 0.14 155);
+  --chart-4: oklch(0.6 0.16 290);
+  --chart-5: oklch(0.72 0.12 60);
+  --chart-6: oklch(0.6 0.08 200);
+  --radius: 0.5rem;
+  /* Emboss: a soft top highlight, a firm bottom edge, two warm drop shadows. */
+  --emboss-sm: inset 0 1px 0 oklch(1 0 0 / 0.7), 0 1px 0 oklch(0.85 0.015 80), 0 1px 3px oklch(0.4 0.03 70 / 0.08);
+  --emboss: inset 0 1px 0 oklch(1 0 0 / 0.8), 0 2.5px 0 oklch(0.88 0.015 85), 0 4px 10px oklch(0.45 0.04 60 / 0.07),
+    0 1px 2px oklch(0.45 0.04 60 / 0.06);
+  --emboss-lg: inset 0 1px 0 oklch(1 0 0 / 0.8), 0 3px 0 oklch(0.88 0.015 85), 0 12px 32px oklch(0.45 0.04 60 / 0.08),
+    0 2px 6px oklch(0.45 0.04 60 / 0.06);
+  --well: inset 0 1px 2px oklch(0.4 0.03 70 / 0.14), inset 0 0 0 1px oklch(0.85 0.015 85 / 0.6);
+}
+
+.dark {
+  --background: oklch(0.27 0 0);
+  --foreground: oklch(0.93 0.005 90);
+  --card: oklch(0.3 0 0);
+  --popover: oklch(0.32 0 0);
+  --primary: oklch(0.67 0.13 39);
+  --secondary: oklch(0.36 0 0);
+  --muted: oklch(0.33 0 0);
+  --muted-foreground: oklch(0.72 0.01 90);
+  --border: oklch(0.36 0.005 90);
+  --sidebar: oklch(0.24 0 0);
+  --sidebar-accent: oklch(0.33 0 0);
+  --good: oklch(0.72 0.13 160);
+  --bad: oklch(0.7 0.17 15);
+  --chart-1: oklch(0.55 0.14 39);
+  --chart-2: oklch(0.58 0.15 250);
+  --chart-3: oklch(0.63 0.14 155);
+  --chart-4: oklch(0.53 0.16 290);
+  --chart-5: oklch(0.65 0.12 60);
+  --chart-6: oklch(0.53 0.08 200);
+  --emboss-sm: inset 0 1px 0 oklch(1 0 0 / 0.05), 0 1px 0 oklch(0.2 0 0), 0 1px 3px oklch(0 0 0 / 0.3);
+  --emboss: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 2.5px 0 oklch(0.2 0 0), 0 4px 10px oklch(0 0 0 / 0.25);
+  --emboss-lg: inset 0 1px 0 oklch(1 0 0 / 0.06), 0 3px 0 oklch(0.2 0 0), 0 12px 32px oklch(0 0 0 / 0.35);
+  --well: inset 0 1px 2px oklch(0 0 0 / 0.4), inset 0 0 0 1px oklch(0.4 0 0 / 0.6);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --shadow-emboss-sm: var(--emboss-sm);
+  --shadow-emboss: var(--emboss);
+  --shadow-emboss-lg: var(--emboss-lg);
+  --shadow-well: var(--well);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--sidebar);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  /* Markdown answers from the agent. */
+  .prose-agent p,
+  .prose-agent li {
+    margin: 0.35rem 0;
+    line-height: 1.55;
+  }
+  .prose-agent ul {
+    padding-left: 1.1rem;
+    list-style: disc;
+  }
+  .prose-agent strong {
+    font-weight: 620;
+  }
+  .prose-agent table {
+    border-collapse: collapse;
+    margin: 0.4rem 0;
+    font-size: 12px;
+  }
+  .prose-agent td {
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+  }
+  .prose-agent code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .prose-agent .cite {
+    display: inline-block;
+    margin: 0 1px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in oklch, var(--primary) 12%, transparent);
+    color: var(--primary);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 16px;
+    vertical-align: 1px;
+    cursor: pointer;
+  }
+  .prose-agent .cite:hover {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+}
+
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}

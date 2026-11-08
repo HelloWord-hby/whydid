@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { labelForValue, type WhydidConfig } from '../config/schema.js';
+import { plainText } from '../boards/schema.js';
 import { type WorkbenchEnv } from './types.js';
 
 export const PROMPT_FILES = ['01-principles.md', '03-tool-policy.md', '04-playbooks.md', '06-output.md'] as const;
@@ -82,7 +83,7 @@ function boardsSection(env: WorkbenchEnv): string {
     .boardsConfig()
     .map(
       (b) =>
-        `- Board \`${b.id}\` "${b.title}" (source \`${b.source}\`): cards ${env.boards
+        `- Board \`${b.id}\` "${plainText(b.title)}" (source \`${b.source}\`): cards ${env.boards
           .cardsOnBoard(b.id)
           .map((c) => `\`${c.id}\``)
           .join(', ')}`

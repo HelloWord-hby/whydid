@@ -21,6 +21,7 @@ import {
   type BoardConfig,
   type BoardsConfig,
   type CardConfig,
+  type Localized,
 } from './schema.js';
 import { type CardResponse } from './types.js';
 import { buildWindow } from './window.js';
@@ -37,13 +38,13 @@ interface BoundCard {
 export interface CatalogCard {
   id: string;
   board: string;
-  title: string;
-  description?: string;
+  title: Localized;
+  description?: Localized;
   display: CardConfig['display'];
   provider: string;
   size: number;
   default: boolean;
-  ask?: string;
+  ask?: Localized;
 }
 
 export interface CatalogBoard extends BoardConfig {

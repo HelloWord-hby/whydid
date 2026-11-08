@@ -25,14 +25,20 @@ sources:
     kind: semantic
     config: presets/app-events.yaml
 
+# Any title, description or ask may be a plain string or one string per
+# language ({en: ..., zh: ...}); the dashboard shows the user's language.
 boards:
   - id: model_output
-    title: Model Output
-    description: How the LLM answers are scored — quality trends, low-score rates, thumbs-down.
+    title: { en: Model Output, zh: 模型输出观测 }
+    description:
+      en: How the LLM answers are scored — quality trends, low-score rates, thumbs-down.
+      zh: LLM 回答的评分表现：质量趋势、低分率、点踩。
     source: model
   - id: product_events
-    title: Product Events
-    description: How people use the product — active users, entry points, funnel, suggested questions.
+    title: { en: Product Events, zh: 数据埋点观测 }
+    description:
+      en: How people use the product — active users, entry points, funnel, suggested questions.
+      zh: 用户怎么使用产品：活跃用户、入口、漏斗、推荐问题。
     source: events
 
 cards:

@@ -6,13 +6,20 @@
  *
  * Starts scripts/mock-llm.ts and `whydid serve` pointed at it; Ctrl-C stops both.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 const port = process.env.PORT ?? '8787';
 const mockPort = process.env.MOCK_LLM_PORT ?? '4010';
 
 function run(args: string[], env: NodeJS.ProcessEnv): ChildProcess {
   return spawn('npx', ['tsx', ...args], { stdio: 'inherit', env: { ...process.env, ...env } });
+}
+
+if (!existsSync('ui/dist/index.html')) {
+  process.stdout.write('Building the dashboard (ui/) once…\n');
+  const built = spawnSync('npm', ['run', 'build:ui'], { stdio: 'inherit' });
+  if (built.status !== 0) process.exit(built.status ?? 1);
 }
 
 const mock = run(['scripts/mock-llm.ts'], { MOCK_LLM_PORT: mockPort });

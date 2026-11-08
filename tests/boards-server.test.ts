@@ -69,9 +69,15 @@ describe('board routes', () => {
     expect((await fetch(base + '/cards/traces?days=5')).status).toBe(400);
   });
 
-  it('serves the dashboard scripts and ignores query strings on static routes', async () => {
-    for (const path of ['/lib.js', '/layout.js', '/boards.js', '/?api=x']) {
-      expect((await fetch(base + path)).status).toBe(200);
+  it('serves the dashboard shell (or a build hint) and refuses paths outside ui/dist/assets', async () => {
+    for (const path of ['/', '/?api=x', '/index.html']) {
+      const r = await fetch(base + path);
+      // 200 when ui/dist is built, 503 with instructions when it is not.
+      expect([200, 503]).toContain(r.status);
+      expect(r.headers.get('content-type')).toMatch(/text\/html/);
+    }
+    for (const path of ['/assets/../package.json', '/assets/%2e%2e%2fpackage.json', '/src/server.ts', '/assets/x.exe']) {
+      expect((await fetch(base + path)).status).toBe(404);
     }
   });
 

@@ -12,12 +12,15 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:ui": "npm --prefix ui install --no-audit --no-fund && npm --prefix ui run build",
     "dev": "tsx src/cli.ts",
+    "dev:ui": "npm --prefix ui run dev",
     "demo:agent": "tsx scripts/dev-agent.ts",
     "seed": "tsx src/demo/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:ui": "npm --prefix ui test"
   },
   "keywords": [
     "attribution",

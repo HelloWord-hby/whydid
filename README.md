@@ -44,11 +44,12 @@ git clone https://github.com/<you>/whydid && cd whydid
 npm install
 docker compose up -d            # PostgreSQL on localhost:5433
 cp .env.example .env            # add your WHYDID_LLM_API_KEY
-npm run seed                    # 60 days of synthetic assistant conversations
+npm run seed                    # synthetic conversations + product events
+npm run build:ui                # build the dashboard once (ui/, React)
 npm run dev -- serve            # dashboard + API on http://localhost:8787
 ```
 
-Open http://localhost:8787 — the built-in observability dashboard shows every metric with week-over-week deltas and trends, one click decomposes any change, and the Ask view runs full investigations. Prefer the terminal?
+Open http://localhost:8787 — boards for model output and product events, a metrics overview with one-click decomposition, and an agent rail that investigates any card. No LLM key yet? `npm run demo:agent` runs everything against a scripted mock. Prefer the terminal?
 
 ```bash
 npm run dev -- ask "why did resolution_rate drop in the last 7 days?" --verbose
@@ -150,17 +151,17 @@ whydid --config presets/langfuse.yaml serve --port 8787
 
 - **Model Output board** — how the LLM answers are scored: trace volume, quality-score trends, low-score rate per evaluation dimension, the worst-scored answers with the judge's rationale, thumbs-down rate and comments. Reads Langfuse live when `LANGFUSE_*` keys are set; without keys it shows a built-in synthetic dataset and says so with a *Demo data* badge.
 - **Product Events board** — how people use the product: active users, sessions, entry points, a step funnel, suggested-question clicks. Reads any event table through a whydid semantic config (`presets/app-events.yaml`; `npm run seed` creates the demo table).
-- **Draggable cards** — each board has a card library. Drag cards onto the board or click *Add*, drag a card's header to reorder, change its width, remove it. Layouts are saved per board in the browser (`localStorage`); *Reset layout* restores the default. A 7/14/30-day switch applies to every card on the board.
-- **Metrics** — every metric of the main config as a card: last 7 full days, delta vs the previous 7, a 14-day sparkline. Generated from your config; add a metric to the YAML and it appears.
-- **Metric drill-down** — trend chart with ±2σ outlier markers, switchable window (7/14/30d) and dimension, and the decomposition table: contribution bars for additive metrics, the mix / behavior / interaction split for rates, with the same honesty guards the agent gets (unstable-share warnings, large-interaction warnings).
-- **Agent panel** — docked next to every board; see [The agent workbench](#the-agent-workbench).
-- **Ask** — the classic single-shot investigation page over the main config, with the report and the expandable tool-call audit trail.
+- **Draggable cards** — each board has a card library. Drag cards onto the board or click *Add*, drag a card's handle to reorder, change its width, remove it. Layouts are saved per board in the browser (`localStorage`); *Reset layout* restores the default. The window selector in the top bar (7/14/30 days) applies to every card.
+- **Metrics** — every metric of the main config in one KPI strip: last 7 full days, delta vs the previous 7, a 14-day sparkline. Generated from your config; add a metric to the YAML and it appears.
+- **Metric drill-down** — trend chart with ±2σ outlier markers, switchable window and dimension, and the decomposition table: contribution bars for additive metrics, the mix / behavior / interaction split for rates, with the same honesty guards the agent gets (unstable-share warnings, large-interaction warnings).
+- **Agent rail** — docked next to every page, resizable; every card has an *Ask Agent* popover with preset questions. See [The agent workbench](#the-agent-workbench).
+- **English and Chinese**, switchable in the top bar (defaults to the browser language); light and dark themes.
 
 Everything except the agent runs on deterministic code (`GET /cards/:id`, `POST /tool`) — no LLM tokens spent by browsing, and the browser only formats numbers the server computed.
 
 ### The agent workbench
 
-The dashboard is the agent's context. Click **✦ Ask** on any card, **✦ Analyze board** in a board's toolbar, or type into the panel, and the agent investigates with tools over every data source the boards read — the semantic SQL sources, Langfuse traces and scores (or the demo dataset), and the cards themselves.
+The dashboard is the agent's context. Pick a question from **Ask Agent** on any card, click **Analyze board** in a board's toolbar, or type into the rail, and the agent investigates with tools over every data source the boards read — the semantic SQL sources, Langfuse traces and scores (or the demo dataset), and the cards themselves.
 
 - **Live tool calls.** Each turn streams over Server-Sent Events; every tool call appears as it runs, then folds into "N tool calls" when the answer arrives.
 - **Citations.** Every tool result carries a ref (`#3`). Answers cite numbers as `[#3]`; clicking one opens that exact call with its arguments and raw result.
@@ -240,13 +241,17 @@ When you need a genuinely new kind of number, write one provider in `src/boards/
 
 For live Langfuse data, edit the model source in `whydid.boards.yaml` to match your project: `feedback_score` is the end-user thumbs score and `negative_feedback_value` its "down" value, `low_score_threshold` fits your judge scale, and cards that name a specific `score` need your score names. Only NUMERIC scores count as quality dimensions, because a BOOLEAN like `hallucinated` has unknown polarity. Each fetch is capped at `max_pages` × 100 records per endpoint; when the cap is hit the card says the window is partial.
 
-The dashboard is static files (`web/`, no build step). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one).
+Any `title`, `description` or `ask` in `whydid.boards.yaml` can be a string or one string per language (`{ en: Sessions, zh: 会话数 }`). Labels the server sends (table columns, metric and dimension labels) are translated by `ui/src/lib/i18n.ts`; extend its `LABELS` table for your own configs.
+
+### The dashboard app
+
+The dashboard lives in `ui/`: React, Vite, Tailwind, Radix primitives, recharts, lucide icons and dnd-kit. `npm run build:ui` builds it into `ui/dist`, which `whydid serve` serves at `GET /` (assets are content-hashed and cached; nothing outside `ui/dist/assets` is reachable). It talks to whydid only through the public API, so you can also host it separately and point it at any deployment with `?api=https://your-whydid:8787` (and `?token=...` once, if the server sets one). For UI development, run `npm run dev:ui` and open the Vite URL with `?api=http://localhost:8787`. UI unit tests: `npm run test:ui`.
 
 ### The HTTP API
 
 | Route | What it does |
 |---|---|
-| `GET /` | The dashboard |
+| `GET /` | The dashboard (`ui/dist`) |
 | `GET /healthz` | Liveness + the semantic layer (metrics with kinds/labels, dimensions, tools) |
 | `POST /tool` | `{"name": "compare_periods", "args": {...}}` — deterministic, no LLM. For your own panels. |
 | `GET /boards` | Board and card catalog from `whydid.boards.yaml`, with each board's default layout |
@@ -301,7 +306,8 @@ question ──► orchestrator (LLM loop, max 12 turns, history compression)
 - `src/boards/` — dashboard boards: config schema, providers, Langfuse/demo model-output source, card service
 - `src/workbench/` — the agent workbench: tool registry, model-output tools, hints, prompt assembly, sessions, grounding check, SSE routes
 - `prompts/` — the prompt layers (L1, L3, L4, L6) as Markdown
-- `src/server.ts` — HTTP mode for dashboards (`/healthz`, `/boards`, `/cards/:id`, `/tool`, `/ask`)
+- `src/server.ts` — HTTP mode for dashboards (`/healthz`, `/boards`, `/cards/:id`, `/tool`, `/ask`, `/agent/...`); `src/static-ui.ts` serves the built dashboard
+- `ui/` — the dashboard app (React + Vite), built into `ui/dist`
 - `src/demo/` — deterministic synthetic dataset; `scripts/mock-langfuse.ts` — fake Langfuse for local dev
 
 ## Notes

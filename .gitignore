@@ -9,3 +9,7 @@ coverage/
 
 # Internal planning notes — never commit
 docs/需求-*.md
+
+# Built dashboard (npm run build:ui)
+ui/dist/
+*.tsbuildinfo

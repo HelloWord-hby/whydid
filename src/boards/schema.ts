@@ -12,6 +12,17 @@ import { DISPLAYS } from './types.js';
 
 const ID = z.string().regex(/^[a-z][a-z0-9_]*$/, 'ids are lower_snake_case');
 
+/** Display text: a plain string, or one string per language, e.g. {en: Sessions, zh: 会话数}. */
+export const localizedSchema = z.union([z.string(), z.record(z.string(), z.string())]);
+export type Localized = z.infer<typeof localizedSchema>;
+
+/** The English (or first) variant of a localized text, for prompts and logs. */
+export function plainText(value: Localized | undefined): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  return value.en ?? Object.values(value)[0] ?? '';
+}
+
 export const modelSourceSchema = z.object({
   kind: z.literal('model_output'),
   feedback_score: z.string().default('user_feedback'),
@@ -31,16 +42,16 @@ export const sourceSchema = z.discriminatedUnion('kind', [modelSourceSchema, sem
 
 export const boardSchema = z.object({
   id: ID,
-  title: z.string(),
-  description: z.string().optional(),
+  title: localizedSchema,
+  description: localizedSchema.optional(),
   source: ID,
 });
 
 export const cardSchema = z.object({
   id: ID,
   board: ID,
-  title: z.string(),
-  description: z.string().optional(),
+  title: localizedSchema,
+  description: localizedSchema.optional(),
   display: z.enum(DISPLAYS),
   provider: z.string(),
   params: z.record(z.string(), z.unknown()).default({}),
@@ -49,7 +60,7 @@ export const cardSchema = z.object({
   /** Shown on the board in the default layout; otherwise library-only. */
   default: z.boolean().default(false),
   /** Preset question for the "Ask the agent" button (semantic boards only). */
-  ask: z.string().optional(),
+  ask: localizedSchema.optional(),
 });
 
 export const boardsConfigSchema = z.object({

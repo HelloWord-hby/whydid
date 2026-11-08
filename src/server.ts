@@ -2,7 +2,7 @@
  * whydid serve — the agent as an HTTP service, so dashboards and
  * observability platforms can embed it.
  *
- *   GET  /         built-in demo page (a reference client for the API)
+ *   GET  /         the dashboard (ui/dist, built by npm run build:ui)
  *   GET  /healthz  liveness + semantic-layer summary
  *   POST /tool     {name, args}   deterministic tool call, no LLM involved.
  *                                 For dashboard panels that need numbers.
@@ -18,7 +18,6 @@
  * WHYDID_SERVE_TOKEN and put it behind TLS — /ask spends LLM tokens.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import { type Sql } from 'postgres';
 import { type WhydidConfig } from './config/schema.js';
 import { executeTool, listToolNames } from './tools/index.js';
@@ -27,23 +26,7 @@ import { type BoardService } from './boards/service.js';
 import { parseDays } from './boards/window.js';
 import { readJsonBody, sendJson } from './http-util.js';
 import { handleAgentRoute, type AgentRouteOptions } from './workbench/http.js';
-
-/**
- * The dashboard is plain static files in web/ at the package root — no
- * build step. Resolved relative to this module so it works both from
- * src/ (tsx) and dist/ (compiled). Exact-match whitelist, no path math.
- */
-const WEB_DIR = new URL('../web/', import.meta.url);
-const STATIC_FILES: Record<string, { file: string; type: string }> = {
-  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
-  '/lib.js': { file: 'lib.js', type: 'text/javascript; charset=utf-8' },
-  '/layout.js': { file: 'layout.js', type: 'text/javascript; charset=utf-8' },
-  '/boards.js': { file: 'boards.js', type: 'text/javascript; charset=utf-8' },
-  '/agent.js': { file: 'agent.js', type: 'text/javascript; charset=utf-8' },
-  '/style.css': { file: 'style.css', type: 'text/css; charset=utf-8' },
-};
+import { serveUi } from './static-ui.js';
 
 export interface ServeOptions {
   port: number;
@@ -81,21 +64,7 @@ export function startServer(
 
     const url = new URL(req.url ?? '/', 'http://localhost');
     const path = url.pathname;
-    const staticEntry =
-      req.method === 'GET' && Object.hasOwn(STATIC_FILES, path) ? STATIC_FILES[path] : undefined;
-    if (staticEntry) {
-      try {
-        const content = await readFile(new URL(staticEntry.file, WEB_DIR));
-        res.writeHead(200, {
-          'Content-Type': staticEntry.type,
-          'Cache-Control': 'no-cache',
-        });
-        res.end(content);
-      } catch {
-        sendJson(res, 500, { error: `Dashboard file ${staticEntry.file} not found.` });
-      }
-      return;
-    }
+    if (await serveUi(req, res, path)) return;
 
     if (req.method === 'GET' && path === '/healthz') {
       sendJson(res, 200, {

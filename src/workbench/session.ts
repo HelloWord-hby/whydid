@@ -14,6 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { compressOldToolResults } from '../agent/orchestrator.js';
+import { plainText } from '../boards/schema.js';
 import { type ChatMessage, type ChatResponse, type ChatToolCall } from '../agent/llm.js';
 import { type ToolSchema } from '../tools/index.js';
 import { checkGrounding, type GroundingReport } from './grounding.js';
@@ -112,8 +113,8 @@ export class AgentSession {
     if (turn.entry === 'card' && !card) throw new Error('A card entry needs a card id.');
     if (turn.entry === 'board' && !board) throw new Error('A board entry needs a board id.');
     return {
-      board: board ? { id: board.id, title: board.title } : undefined,
-      card: card ? { id: card.id, title: card.title, provider: card.provider } : undefined,
+      board: board ? { id: board.id, title: plainText(board.title) } : undefined,
+      card: card ? { id: card.id, title: plainText(card.title), provider: card.provider } : undefined,
     };
   }
 
